@@ -146,6 +146,11 @@
       <div class="controles">
       <button class="btn" onclick="mostrarModalScan()">+ Escanear</button>
       <button class="btn btn-primary" id="btnPoll" onclick="togglePoll()">▶ Monitorear</button>
+      <select id="pollIntervalo" style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
+        <option value="10">10s</option>
+        <option value="20">20s</option>
+        <option value="30" selected>30s</option>
+      </select>
       <button class="btn" onclick="cargarDatos()">⟳ Recargar</button>
       <button class="btn" onclick="generarReporte('html')">📄 Reporte HTML</button>
       <button class="btn" onclick="generarReporte('txt')">📃 Reporte TXT</button>
@@ -527,27 +532,32 @@ function togglePoll() {
     btn.textContent = '▶ Monitorear';
     document.getElementById('pollBadge').textContent = '⏹ detenido';
     document.getElementById('contador').textContent = '—';
-  } else {
-    pollActivo = true;
-    btn.textContent = '⏸ Detener';
-    document.getElementById('pollBadge').textContent = '▶ activo';
-    pollContador = 0;
-    pollIntervalId = setInterval(async () => {
-      try {
-        await apiFetch('/api/poll?nombre_cliente=' + document.getElementById('clienteBadge').textContent);
-        cargarDatos();
-      } catch (_) {}
-    }, 30000);
-    actualizarContador();
-    toast('Monitoreo iniciado (cada 30s)');
+    return;
   }
+  // Detener intervalo previo si existiera
+  if (pollIntervalId) clearInterval(pollIntervalId);
+  const segundos = parseInt(document.getElementById('pollIntervalo').value, 10);
+  const ms = segundos * 1000;
+  pollActivo = true;
+  btn.textContent = '⏸ Detener';
+  document.getElementById('pollBadge').textContent = '▶ activo';
+  pollContador = 0;
+  pollIntervalId = setInterval(async () => {
+    try {
+      await apiFetch('/api/poll?nombre_cliente=' + document.getElementById('clienteBadge').textContent);
+      cargarDatos();
+    } catch (_) {}
+  }, ms);
+  actualizarContador();
+  toast(`Monitoreo iniciado (cada ${segundos}s)`);
 }
 
 function actualizarContador() {
   if (!pollActivo) return;
   pollContador++;
-  document.getElementById('contador').textContent = `⏱ ${pollContador * 30}s`;
-  setTimeout(actualizarContador, 30000);
+  const segundos = parseInt(document.getElementById('pollIntervalo').value, 10);
+  document.getElementById('contador').textContent = `⏱ ${pollContador * segundos}s`;
+  setTimeout(actualizarContador, segundos * 1000);
 }
 
 async function verServicios(id, ip) {
