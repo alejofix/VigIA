@@ -26,6 +26,19 @@ def obtener_ultimo_estado(session: Session, dispositivo_id: int) -> str:
     return None
 
 
+def _leer_tabla_arp() -> dict:
+    arp = {}
+    try:
+        with open("/proc/net/arp") as f:
+            for line in f.readlines()[1:]:
+                parts = line.strip().split()
+                if len(parts) >= 4 and parts[3] != "00:00:00:00:00:00":
+                    arp[parts[3].lower()] = parts[0]
+    except Exception:
+        pass
+    return arp
+
+
 def hacer_ping(ip: str) -> dict:
     try:
         proc = subprocess.run(
@@ -53,9 +66,32 @@ def hacer_ping(ip: str) -> dict:
         return {"estado": "down", "latencia_ms": None, "perdida_pct": 100}
 
 
+def _mac_local() -> str:
+    try:
+        result = os.popen("ip -o addr show 2>/dev/null | grep ' inet ' | grep -v ' lo ' | grep -v docker | head -1").read()
+        if result:
+            iface = result.strip().split()[1]
+            mac = os.popen(f"cat /sys/class/net/{iface}/address 2>/dev/null").read().strip()
+            if mac:
+                return mac.lower()
+    except Exception:
+        pass
+    return ""
+
+
 def procesar_dispositivo(session: Session, dispositivo: Dispositivo):
     resultado = hacer_ping(dispositivo.ip)
     estado_anterior = obtener_ultimo_estado(session, dispositivo.id)
+
+    # Verificar MAC contra tabla ARP (solo para dispositivos remotos)
+    if dispositivo.mac and dispositivo.mac.lower() != _mac_local():
+        arp = _leer_tabla_arp()
+        mac_buscada = dispositivo.mac.lower()
+        if mac_buscada in arp:
+            ip_arp = arp[mac_buscada]
+            if ip_arp != dispositivo.ip:
+                logger.info(f"MAC {dispositivo.mac} ahora tiene IP {ip_arp} (antes {dispositivo.ip}), actualizando")
+                dispositivo.ip = ip_arp
 
     ping = Ping(
         dispositivo_id=dispositivo.id,
@@ -104,6 +140,30 @@ def procesar_dispositivo(session: Session, dispositivo: Dispositivo):
     dispositivo.ultima_vez = datetime.now()
 
 
+def _descubrir_por_arp(session: Session):
+    try:
+        arp = _leer_tabla_arp()
+        existentes = {d.mac.lower() for d in session.query(Dispositivo).all() if d.mac}
+        local_ip = _ip_local()
+        for mac, ip in arp.items():
+            if mac not in existentes and ip != local_ip and not ip.startswith("172.17.") and not ip.startswith("172.18."):
+                nuevo = Dispositivo(ip=ip, mac=mac, tipo="dispositivo", activo=1)
+                session.add(nuevo)
+                logger.info(f"Nuevo dispositivo descubierto por ARP: {ip} ({mac})")
+    except Exception as e:
+        logger.error(f"Error en descubrimiento ARP: {e}")
+
+
+def _ip_local() -> str:
+    try:
+        result = os.popen("ip -o addr show 2>/dev/null | grep ' inet ' | grep -v ' lo ' | grep -v docker | head -1").read()
+        if result:
+            return result.strip().split()[3].split("/")[0]
+    except Exception:
+        pass
+    return ""
+
+
 def ciclo_polling(nombre_cliente: str, intervalo: int = POLL_INTERVAL):
     db_path = f"data/{nombre_cliente}.db"
     if not os.path.exists(db_path):
@@ -115,6 +175,7 @@ def ciclo_polling(nombre_cliente: str, intervalo: int = POLL_INTERVAL):
     session: Session = session_factory()
 
     try:
+        _descubrir_por_arp(session)
         dispositivos = session.query(Dispositivo).filter_by(activo=1).all()
         if not dispositivos:
             logger.info("No hay dispositivos activos para monitorear")

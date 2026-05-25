@@ -84,6 +84,7 @@ class Credencial(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     dispositivo_id = Column(Integer, ForeignKey("dispositivos.id"))
+    alias = Column(Text)
     admin_pass = Column(Text)
     usuario = Column(Text)
     app_pass = Column(Text)

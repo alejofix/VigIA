@@ -134,6 +134,22 @@ async def crear_dispositivo(data: DispositivoCreate):
         session.close()
 
 
+@app.delete("/api/dispositivos/{dispositivo_id}")
+async def eliminar_dispositivo(dispositivo_id: int):
+    session = _get_session()
+    try:
+        d = session.get(Dispositivo, dispositivo_id)
+        if not d:
+            raise HTTPException(404, "Dispositivo no encontrado")
+        session.query(PosicionTopologia).filter_by(dispositivo_id=dispositivo_id).delete()
+        session.query(Credencial).filter_by(dispositivo_id=dispositivo_id).delete()
+        session.delete(d)
+        session.commit()
+        return {"ok": True, "mensaje": f"Dispositivo {d.ip} eliminado"}
+    finally:
+        session.close()
+
+
 @app.get("/api/dispositivos/{dispositivo_id}/pings", response_model=list[PingOut])
 async def listar_pings(dispositivo_id: int, limite: int = Query(50, le=500)):
     session = _get_session()
@@ -170,6 +186,7 @@ async def obtener_credenciales(dispositivo_id: int):
         cred = session.query(Credencial).filter_by(dispositivo_id=dispositivo_id).first()
         if cred:
             return {
+                "alias": cred.alias or "",
                 "admin_pass": cred.admin_pass or "",
                 "usuario": cred.usuario or "",
                 "app_pass": cred.app_pass or "",
@@ -177,6 +194,7 @@ async def obtener_credenciales(dispositivo_id: int):
                 "serial": disp.serial or "",
             }
         return {
+            "alias": "",
             "admin_pass": "",
             "usuario": "",
             "app_pass": "",
@@ -196,6 +214,7 @@ async def guardar_credenciales(dispositivo_id: int, data: CredencialCreate):
             disp.serial = data.serial
         cred = session.query(Credencial).filter_by(dispositivo_id=dispositivo_id).first()
         if cred:
+            cred.alias = data.alias
             cred.admin_pass = data.admin_pass
             cred.usuario = data.usuario
             cred.app_pass = data.app_pass
@@ -203,6 +222,7 @@ async def guardar_credenciales(dispositivo_id: int, data: CredencialCreate):
         else:
             cred = Credencial(
                 dispositivo_id=dispositivo_id,
+                alias=data.alias,
                 admin_pass=data.admin_pass,
                 usuario=data.usuario,
                 app_pass=data.app_pass,
@@ -263,40 +283,10 @@ async def stats():
     try:
         total = session.query(Dispositivo).count()
         activos = session.query(Dispositivo).filter_by(activo=1).count()
-        caidos = session.query(Ping).filter(
-            Ping.estado == "down",
-            Ping.timestamp == (
-                session.query(Ping.timestamp)
-                .filter(Ping.dispositivo_id == Dispositivo.id)
-                .order_by(Ping.timestamp.desc())
-                .limit(1)
-                .correlate(Dispositivo)
-                .scalar_subquery()
-            ),
-        ).count()
-        degradados = session.query(Ping).filter(
-            Ping.estado == "degradado",
-            Ping.timestamp == (
-                session.query(Ping.timestamp)
-                .filter(Ping.dispositivo_id == Dispositivo.id)
-                .order_by(Ping.timestamp.desc())
-                .limit(1)
-                .correlate(Dispositivo)
-                .scalar_subquery()
-            ),
-        ).count()
-        warn = session.query(Ping).filter(
-            Ping.estado == "warn",
-            Ping.timestamp == (
-                session.query(Ping.timestamp)
-                .filter(Ping.dispositivo_id == Dispositivo.id)
-                .order_by(Ping.timestamp.desc())
-                .limit(1)
-                .correlate(Dispositivo)
-                .scalar_subquery()
-            ),
-        ).count()
         alertas_pend = session.query(Alerta).filter_by(resuelta=0).count()
+        warn = session.query(Alerta).filter(Alerta.tipo == "latencia_alta", Alerta.resuelta == 0).count()
+        degradados = session.query(Alerta).filter(Alerta.tipo == "degradado", Alerta.resuelta == 0).count()
+        caidos = session.query(Alerta).filter(Alerta.tipo == "caida", Alerta.resuelta == 0).count()
         return StatsOut(
             total_dispositivos=total,
             activos=activos,

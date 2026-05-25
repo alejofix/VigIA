@@ -3,6 +3,7 @@ from pathlib import Path
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, scoped_session
 from dotenv import load_dotenv
+from backend.models import Base
 
 load_dotenv()
 
@@ -39,7 +40,13 @@ def get_session(db_path: str):
 
 
 def init_db(db_path: str):
-    from backend.models import Base
-    engine = create_engine_for_db(db_path)
+    engine = create_engine(f"sqlite:///{db_path}")
     Base.metadata.create_all(engine)
+    with engine.connect() as conn:
+        from sqlalchemy import text
+        try:
+            conn.execute(text("ALTER TABLE credenciales ADD COLUMN alias TEXT"))
+            conn.commit()
+        except Exception:
+            pass
     return engine

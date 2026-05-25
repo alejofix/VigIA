@@ -248,6 +248,8 @@
           <label style="font-size:11px;color:var(--muted);">Número de serie <span style="color:var(--warn);">no detectado</span></label>
           <input id="inputSerial" type="text" placeholder="ingresar serial manualmente" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
         </div>
+        <label style="font-size:11px;color:var(--muted);">Alias <span style="color:var(--teal);">opcional</span></label>
+        <input id="inputAlias" placeholder="ej: camara porton, router principal" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
         <label style="font-size:11px;color:var(--muted);">Contraseña de administración</label>
         <input id="inputAdminPass" type="text" placeholder="admin password" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
         <label style="font-size:11px;color:var(--muted);">Usuario (nombre / cel / correo) <span style="color:var(--teal);">opcional</span></label>
@@ -344,7 +346,7 @@ async function cargarDispositivos() {
         <td><span class="status-dot ${dotClass}"></span>${estadoTexto}</td>
         <td>${latStr}</td>
         <td>${ultima}</td>
-        <td><button class="btn btn-sm" onclick="verServicios(${d.id}, '${d.ip}')">🔍</button> <button class="btn btn-sm" onclick="verCredenciales(${d.id}, '${d.ip}')">🔑</button></td>
+        <td><button class="btn btn-sm" onclick="eliminarDispositivo(${d.id}, '${d.ip}')">🗑️</button> <button class="btn btn-sm" onclick="verServicios(${d.id}, '${d.ip}')">🔍</button> <button class="btn btn-sm" onclick="verCredenciales(${d.id}, '${d.ip}')">🔑</button></td>
       `;
       tbody.appendChild(tr);
     }
@@ -627,6 +629,7 @@ async function verCredenciales(id, ip) {
   _credencialId = id;
   document.getElementById('credencialesTitle').textContent = `Credenciales - ${ip}`;
   document.getElementById('inputSerial').value = '';
+  document.getElementById('inputAlias').value = '';
   document.getElementById('inputAdminPass').value = '';
   document.getElementById('inputUsuario').value = '';
   document.getElementById('inputAppPass').value = '';
@@ -642,6 +645,7 @@ async function verCredenciales(id, ip) {
       } else {
         document.getElementById('serialGroupManual').style.display = 'flex';
       }
+      document.getElementById('inputAlias').value = data.alias || '';
       document.getElementById('inputAdminPass').value = data.admin_pass || '';
       document.getElementById('inputUsuario').value = data.usuario || '';
       document.getElementById('inputAppPass').value = data.app_pass || '';
@@ -655,12 +659,24 @@ async function verCredenciales(id, ip) {
   document.getElementById('modalCredenciales').classList.add('active');
 }
 
+async function eliminarDispositivo(id, ip) {
+  if (!confirm(`¿Eliminar ${ip} definitivamente?`)) return;
+  try {
+    await apiFetch(`/api/dispositivos/${id}`, { method: 'DELETE' });
+    toast(`Dispositivo ${ip} eliminado`);
+    cargarDatos();
+  } catch (e) {
+    toast('Error: ' + e.message);
+  }
+}
+
 async function guardarCredenciales() {
   const data = {
     dispositivo_id: _credencialId,
     serial: document.getElementById('serialGroupManual').style.display !== 'none'
       ? document.getElementById('inputSerial').value
       : document.getElementById('spanSerial').textContent,
+    alias: document.getElementById('inputAlias').value,
     admin_pass: document.getElementById('inputAdminPass').value,
     usuario: document.getElementById('inputUsuario').value,
     app_pass: document.getElementById('inputAppPass').value,

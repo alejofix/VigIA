@@ -96,6 +96,7 @@ class ClienteSwitch(BaseModel):
 
 class CredencialCreate(BaseModel):
     dispositivo_id: int
+    alias: Optional[str] = ""
     admin_pass: Optional[str] = ""
     usuario: Optional[str] = ""
     app_pass: Optional[str] = ""
@@ -107,6 +108,7 @@ class CredencialOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     dispositivo_id: int
+    alias: Optional[str] = ""
     admin_pass: Optional[str] = ""
     usuario: Optional[str] = ""
     app_pass: Optional[str] = ""
