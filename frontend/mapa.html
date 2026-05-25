@@ -325,7 +325,9 @@ async function mostrarPanel(nodeId) {
     }
   } else if (nodo.estado === 'degradado') {
     estadoClase = 'degradado';
+    estadoTexto = 'degradado';
   } else if (nodo.estado === 'down' || nodo.estado === 'warn') {
+    if (nodo.estado === 'warn') estadoTexto = 'latencia alta';
     estadoClase = 'down';
   }
   document.getElementById('pEstado').innerHTML = `<span class="panel-estado ${estadoClase}">${estadoTexto}</span>`;

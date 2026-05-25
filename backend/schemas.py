@@ -74,6 +74,7 @@ class PosicionUpdate(BaseModel):
 class StatsOut(BaseModel):
     total_dispositivos: int
     activos: int
+    warn: int = 0
     degradados: int = 0
     caidos: int
     alertas_pendientes: int

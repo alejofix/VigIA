@@ -61,19 +61,22 @@
   .header-right { display: flex; align-items: center; gap: 16px; }
   .badge { background: rgba(14,165,160,0.1); border: 1px solid rgba(14,165,160,0.3); color: var(--teal); font-size: 10px; padding: 3px 8px; border-radius: 20px; }
   .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
-  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
-  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; transition: border-color 0.2s, box-shadow 0.2s; }
+  .stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 24px; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; transition: border-color 0.2s, box-shadow 0.2s; }
   .stat-card:hover { border-color: rgba(14,165,160,0.3); box-shadow: 0 0 20px rgba(14,165,160,0.05); }
-  .stat-num { font-size: 28px; font-weight: 700; color: var(--teal-lt); }
-  .stat-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 4px; }
+  .stat-card.total { background: linear-gradient(135deg, var(--surface), #1a2332); border-color: var(--teal); }
+  .stat-card.total .stat-num { color: var(--teal-lt); font-size: 26px; }
+  .stat-card.alertas { background: linear-gradient(135deg, var(--surface), #2a1a1a); border-color: var(--down); }
+  .stat-card.alertas .stat-num { color: #f87171; font-size: 26px; }
+  .stat-num { font-size: 22px; font-weight: 700; color: var(--teal-lt); }
+  .stat-label { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px; }
   .stat-card.up { border-left: 3px solid var(--up); }
   .stat-card.up .stat-num { color: var(--up); }
   .stat-card.down { border-left: 3px solid var(--down); }
   .stat-card.down .stat-num { color: var(--down); }
   .stat-card.warn { border-left: 3px solid var(--warn); }
-  .stat-card.warn .stat-num { color: var(--warn); }
-  .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
-  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .stat-card.warn .stat-num { color: var(--warn); }  .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; }
   thead { background: var(--hover); border-bottom: 1px solid var(--border); }
   th { padding: 10px 14px; text-align: left; color: var(--teal); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600; white-space: nowrap; }
   td { padding: 10px 14px; color: var(--muted); border-bottom: 1px solid rgba(48,54,61,0.4); font-family: var(--font); transition: background 0.15s; }
@@ -82,11 +85,11 @@
   tbody tr:hover td { background: rgba(14,165,160,0.08); }
   tbody tr:hover + tr td { border-top-color: transparent; }
   td:first-child { color: var(--text); font-weight: 500; }
-  .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; box-shadow: 0 0 6px rgba(0,0,0,0.3); }
-  .dot-up { background: var(--up); box-shadow: 0 0 6px rgba(34,197,94,0.4); }
-  .dot-degradado { background: var(--degradado); box-shadow: 0 0 6px rgba(249,115,22,0.5); }
-  .dot-down { background: var(--down); box-shadow: 0 0 6px rgba(239,68,68,0.4); }
-  .dot-warn { background: var(--warn); box-shadow: 0 0 6px rgba(245,158,11,0.4); }
+  .status-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 4px; box-shadow: 0 0 4px rgba(0,0,0,0.3); }
+  .dot-up { background: var(--up); box-shadow: 0 0 4px rgba(34,197,94,0.4); }
+  .dot-degradado { background: var(--degradado); box-shadow: 0 0 4px rgba(249,115,22,0.5); }
+  .dot-down { background: var(--down); box-shadow: 0 0 4px rgba(239,68,68,0.4); }
+  .dot-warn { background: var(--warn); box-shadow: 0 0 4px rgba(245,158,11,0.4); }
   .dot-unknown { background: var(--border); }
   .tipo-tag { background: rgba(14,165,160,0.08); border: 1px solid rgba(14,165,160,0.2); border-radius: 4px; padding: 2px 8px; font-size: 10px; color: var(--teal-lt); }
   .controles { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
@@ -140,11 +143,12 @@
 
   <div class="container">
     <div class="stats">
-      <div class="stat-card"><div class="stat-num" id="numTotal">0</div><div class="stat-label">Dispositivos</div></div>
+      <div class="stat-card total"><div class="stat-num" id="numTotal">0</div><div class="stat-label">Dispositivos</div></div>
       <div class="stat-card up"><div class="stat-num" id="numUp">0</div><div class="stat-label">Activos</div></div>
+      <div class="stat-card" style="border-left-color:var(--warn);"><div class="stat-num" id="numWarn">0</div><div class="stat-label" style="color:var(--warn);">Latencia alta</div></div>
       <div class="stat-card" style="border-left-color:var(--degradado);"><div class="stat-num" id="numDegradados">0</div><div class="stat-label" style="color:var(--degradado);">Degradados</div></div>
       <div class="stat-card down"><div class="stat-num" id="numDown">0</div><div class="stat-label">Caidos</div></div>
-      <div class="stat-card warn"><div class="stat-num" id="numAlertas">0</div><div class="stat-label">Alertas</div></div>
+      <div class="stat-card alertas"><div class="stat-num" id="numAlertas">0</div><div class="stat-label">Alertas</div></div>
     </div>
 
       <div class="controles">
@@ -293,6 +297,7 @@ async function cargarStats() {
     const s = await apiFetch('/api/stats');
     document.getElementById('numTotal').textContent = s.total_dispositivos;
     document.getElementById('numUp').textContent = s.activos;
+    document.getElementById('numWarn').textContent = s.warn;
     document.getElementById('numDegradados').textContent = s.degradados;
     document.getElementById('numDown').textContent = s.caidos;
     document.getElementById('numAlertas').textContent = s.alertas_pendientes;
@@ -321,10 +326,11 @@ async function cargarDispositivos() {
       const ultima = d.ultima_vez ? new Date(d.ultima_vez).toLocaleString() : '—';
 
       let dotClass = 'dot-unknown';
-      if (estado === 'up') { dotClass = 'dot-up'; upCount++; }
-      else if (estado === 'degradado') { dotClass = 'dot-degradado'; }
-      else if (estado === 'down') { dotClass = 'dot-down'; downCount++; }
-      else if (estado === 'warn') { dotClass = 'dot-warn'; }
+      let estadoTexto = estado;
+      if (estado === 'up') { dotClass = 'dot-up'; upCount++; estadoTexto = 'activo'; }
+      else if (estado === 'degradado') { dotClass = 'dot-degradado'; estadoTexto = 'degradado'; }
+      else if (estado === 'down') { dotClass = 'dot-down'; downCount++; estadoTexto = 'caido'; }
+      else if (estado === 'warn') { dotClass = 'dot-warn'; estadoTexto = 'latencia alta'; }
 
       const latStr = latencia !== null ? `${latencia.toFixed(0)}ms` : '—';
 
@@ -335,7 +341,7 @@ async function cargarDispositivos() {
         <td style="font-size:10px;color:var(--muted);font-family:monospace;">${d.mac || '—'}</td>
         <td style="font-size:10px;color:var(--muted);">${d.fabricante || '—'}</td>
         <td><span class="tipo-tag">${d.tipo || 'desconocido'}</span></td>
-        <td><span class="status-dot ${dotClass}"></span>${estado}</td>
+        <td><span class="status-dot ${dotClass}"></span>${estadoTexto}</td>
         <td>${latStr}</td>
         <td>${ultima}</td>
         <td><button class="btn btn-sm" onclick="verServicios(${d.id}, '${d.ip}')">🔍</button> <button class="btn btn-sm" onclick="verCredenciales(${d.id}, '${d.ip}')">🔑</button></td>
