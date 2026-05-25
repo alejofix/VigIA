@@ -1,0 +1,29 @@
+# Dependencias
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+
+# Datos
+*.db
+data/
+
+# Entorno
+.env
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Ayuda personal
+_fix/
+
+# Reportes generados
+reporte_*.pdf
+reporte_*.html
+
+# IDE
+.vscode/
+.idea/

@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VigIA — Mapa Topológico</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.9/dist/vis-network.min.js"></script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.9/dist/dist/vis-network.min.css" rel="stylesheet">
+<style>
+  :root {
+    --bg:      #0D1117;
+    --surface: #161B22;
+    --hover:   #1F2937;
+    --teal:    #0EA5A0;
+    --teal-lt: #D0F4F2;
+    --text:    #F0F6FC;
+    --muted:   #8B949E;
+    --up:      #16A34A;
+    --warn:    #D97706;
+    --down:    #DC2626;
+    --border:  #30363D;
+    --font:    'JetBrains Mono', monospace;
+    --radius:  6px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 13px;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(14,165,160,0.015) 2px, rgba(14,165,160,0.015) 4px);
+    pointer-events: none;
+    z-index: 999;
+  }
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 52px;
+    position: relative;
+    z-index: 100;
+  }
+  .header-left { display: flex; align-items: center; gap: 16px; }
+  .logo { font-size: 18px; font-weight: 700; color: var(--teal); letter-spacing: -1px; }
+  .logo span { font-weight: 300; color: var(--teal-lt); }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .btn {
+    background: var(--surface); border: 1px solid var(--border); color: var(--muted);
+    padding: 5px 12px; border-radius: var(--radius); font-family: var(--font);
+    font-size: 11px; cursor: pointer; transition: all 0.15s; text-decoration: none;
+  }
+  .btn:hover { border-color: var(--teal); color: var(--teal-lt); }
+  .btn-primary { background: rgba(14,165,160,0.15); border-color: var(--teal); color: var(--teal-lt); }
+  .badge {
+    background: rgba(14,165,160,0.1); border: 1px solid rgba(14,165,160,0.3);
+    color: var(--teal); font-size: 10px; padding: 2px 8px; border-radius: 20px;
+  }
+  .layout { display: flex; height: calc(100vh - 52px); }
+  #mapa-container { flex: 1; position: relative; }
+  #mapa { width: 100%; height: 100%; }
+  .panel-lateral {
+    width: 0;
+    overflow: hidden;
+    background: var(--surface);
+    border-left: 1px solid var(--border);
+    transition: width 0.25s ease;
+    display: flex;
+    flex-direction: column;
+  }
+  .panel-lateral.abierto { width: 320px; min-width: 320px; }
+  .panel-header {
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .panel-header h3 { font-size: 13px; color: var(--teal-lt); font-weight: 600; }
+  .panel-close {
+    background: none; border: none; color: var(--muted); font-size: 16px;
+    cursor: pointer; padding: 2px 6px; border-radius: 3px;
+  }
+  .panel-close:hover { background: var(--hover); color: var(--text); }
+  .panel-body { flex: 1; overflow-y: auto; padding: 16px; font-size: 12px; }
+  .panel-field { margin-bottom: 12px; }
+  .panel-label { font-size: 9px; color: var(--teal); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 2px; }
+  .panel-value { color: var(--text); font-size: 12px; word-break: break-all; }
+  .panel-estado { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 3px; font-size: 11px; }
+  .panel-estado.up { background: rgba(22,163,74,0.15); color: var(--up); border: 1px solid rgba(22,163,74,0.3); }
+  .panel-estado.down { background: rgba(220,38,38,0.15); color: var(--down); border: 1px solid rgba(220,38,38,0.3); }
+  .panel-estado.warn { background: rgba(217,119,6,0.15); color: var(--warn); border: 1px solid rgba(217,119,6,0.3); }
+  .panel-estado.unknown { background: rgba(139,148,158,0.1); color: var(--muted); border: 1px solid var(--border); }
+  .panel-barra-historial { display: flex; gap: 2px; flex-wrap: wrap; margin-top: 4px; }
+  .h-bar { width: 6px; height: 14px; border-radius: 1px; }
+  .controles-mapa {
+    position: absolute; bottom: 16px; left: 16px; z-index: 10;
+    display: flex; gap: 8px; align-items: center;
+  }
+  .controles-mapa .btn { background: var(--surface); }
+  .contador { color: var(--muted); font-size: 10px; }
+  .leyenda {
+    position: absolute; top: 16px; right: 16px; z-index: 10;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 10px 14px; font-size: 10px;
+  }
+  .leyenda-item { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .leyenda-item:last-child { margin-bottom: 0; }
+  .leyenda-dot { width: 10px; height: 10px; border-radius: 50%; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="logo">Vig<span>IA</span></div>
+    <span class="badge">Mapa topológico</span>
+    <span class="badge" id="clienteBadge">red_cliente</span>
+  </div>
+  <div class="header-right">
+    <span class="badge" id="pollBadge">⏹ detenido</span>
+    <a href="/" class="btn">⬅ Dashboard</a>
+  </div>
+</div>
+
+<div class="layout">
+  <div id="mapa-container">
+    <div id="mapa"></div>
+
+    <div class="leyenda">
+      <div class="leyenda-item"><span class="leyenda-dot" style="background:var(--up)"></span> UP</div>
+      <div class="leyenda-item"><span class="leyenda-dot" style="background:var(--down)"></span> DOWN</div>
+      <div class="leyenda-item"><span class="leyenda-dot" style="background:var(--warn)"></span> Latencia alta</div>
+      <div class="leyenda-item"><span class="leyenda-dot" style="background:var(--border)"></span> Desconocido</div>
+      <hr style="border-color:var(--border);margin:6px 0;">
+      <div id="leyendaSegmentos" style="font-size:9px;color:var(--muted);"></div>
+    </div>
+
+    <div class="controles-mapa">
+      <button class="btn btn-primary" id="btnPoll" onclick="togglePoll()">▶ Monitorear</button>
+      <button class="btn" onclick="cargarTopologia()">⟳ Recargar</button>
+      <button class="btn" onclick="autoAcomodar()">⊞ Acomodar</button>
+      <span class="contador" id="contador">—</span>
+    </div>
+  </div>
+
+  <div class="panel-lateral" id="panelLateral">
+    <div class="panel-header">
+      <h3 id="panelTitulo">Dispositivo</h3>
+      <button class="panel-close" onclick="cerrarPanel()">✕</button>
+    </div>
+    <div class="panel-body" id="panelBody">
+      <div class="panel-field">
+        <div class="panel-label">IP</div>
+        <div class="panel-value" id="pIP">—</div>
+      </div>
+      <div class="panel-field">
+        <div class="panel-label">Hostname</div>
+        <div class="panel-value" id="pHostname">—</div>
+      </div>
+      <div class="panel-field">
+        <div class="panel-label">Tipo</div>
+        <div class="panel-value" id="pTipo">—</div>
+      </div>
+      <div class="panel-field">
+        <div class="panel-label">Segmento</div>
+        <div class="panel-value" id="pSegmento">—</div>
+      </div>
+      <div class="panel-field">
+        <div class="panel-label">Estado</div>
+        <div class="panel-value" id="pEstado">—</div>
+      </div>
+      <div class="panel-field">
+        <div class="panel-label">Latencia</div>
+        <div class="panel-value" id="pLatencia">—</div>
+      </div>
+      <div class="panel-field">
+        <div class="panel-label">Historial (ultimos 24)</div>
+        <div class="panel-barra-historial" id="pHistorial"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+var API_BASE = '';
+if (window.location.port === '' || window.location.port === '80' || window.location.port === '443') {
+  API_BASE = 'http://localhost:8080';
+}
+
+async function apiFetch(url, opts = {}) {
+  const resp = await fetch(API_BASE + url, {
+    headers: { 'Content-Type': 'application/json', ...opts.headers },
+    ...opts,
+  });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return resp.json();
+}
+
+let network = null;
+let nodes = null;
+let edges = null;
+let nodosData = [];
+let pollIntervalId = null;
+let pollActivo = false;
+let pollContador = 0;
+
+function colorEstado(estado, latencia) {
+  if (estado === 'up') {
+    if (latencia !== null && latencia > 100) return { background: '#D97706', border: '#B45309' };
+    return { background: '#16A34A', border: '#15803D' };
+  }
+  if (estado === 'down' || estado === 'timeout') return { background: '#DC2626', border: '#B91C1C' };
+  return { background: '#30363D', border: '#1F2937' };
+}
+
+async function cargarTopologia() {
+  try {
+    const data = await apiFetch('/api/topologia');
+    nodosData = data.nodos || [];
+    actualizarLeyendaSegmentos();
+
+    const visNodes = new vis.DataSet(nodosData.map(n => {
+      const c = colorEstado(n.estado, n.latencia);
+      const segLabel = n.segmento ? n.segmento : '';
+      return {
+        id: n.id,
+        label: n.hostname || n.ip,
+        title: `${n.ip}\n${n.tipo || ''}\n${segLabel}\n${n.estado}`,
+        color: c,
+        x: n.x || undefined,
+        y: n.y || undefined,
+        font: { color: '#F0F6FC', size: 11, face: 'JetBrains Mono' },
+        size: 20,
+        borderWidth: 2,
+        shape: 'dot',
+      };
+    }));
+
+    const visEdges = new vis.DataSet(data.enlaces || []);
+
+    const container = document.getElementById('mapa');
+    const options = {
+      physics: { enabled: false },
+      interaction: {
+        dragNodes: true,
+        dragView: true,
+        zoomView: true,
+        hover: true,
+      },
+      manipulation: { enabled: false },
+      nodes: {
+        font: { color: '#F0F6FC', size: 11, face: 'JetBrains Mono' },
+        borderWidth: 2,
+        size: 20,
+      },
+      edges: {
+        color: { color: '#30363D', hover: '#0EA5A0' },
+        width: 1,
+        smooth: { type: 'continuous' },
+      },
+      background: '#0D1117',
+    };
+
+    if (network) {
+      network.setData({ nodes: visNodes, edges: visEdges });
+    } else {
+      network = new vis.Network(container, { nodes: visNodes, edges: visEdges }, options);
+
+      network.on('click', function(params) {
+        if (params.nodes.length > 0) {
+          const nodeId = params.nodes[0];
+          mostrarPanel(nodeId);
+        }
+      });
+
+      network.on('dragEnd', function(params) {
+        if (params.nodes.length > 0) {
+          guardarPosiciones();
+        }
+      });
+
+      network.on('hoverNode', function(params) {
+        document.getElementById('mapa').style.cursor = 'pointer';
+      });
+      network.on('blurNode', function() {
+        document.getElementById('mapa').style.cursor = 'default';
+      });
+    }
+  } catch (e) {
+    console.error('Error cargando topologia:', e);
+  }
+}
+
+async function mostrarPanel(nodeId) {
+  const nodo = nodosData.find(n => n.id === nodeId);
+  if (!nodo) return;
+
+  document.getElementById('panelLateral').classList.add('abierto');
+  document.getElementById('panelTitulo').textContent = nodo.hostname || nodo.ip;
+  document.getElementById('pIP').textContent = nodo.ip;
+  document.getElementById('pHostname').textContent = nodo.hostname || '—';
+  document.getElementById('pTipo').textContent = nodo.tipo || '—';
+  document.getElementById('pSegmento').textContent = nodo.segmento || '—';
+
+  let estadoClase = 'unknown';
+  let estadoTexto = nodo.estado || 'desconocido';
+  if (nodo.estado === 'up') {
+    if (nodo.latencia !== null && nodo.latencia > 100) {
+      estadoClase = 'warn';
+      estadoTexto = 'latencia alta';
+    } else {
+      estadoClase = 'up';
+    }
+  } else if (nodo.estado === 'down' || nodo.estado === 'timeout') {
+    estadoClase = 'down';
+  }
+  document.getElementById('pEstado').innerHTML = `<span class="panel-estado ${estadoClase}">${estadoTexto}</span>`;
+  document.getElementById('pLatencia').textContent = nodo.latencia !== null ? `${nodo.latencia.toFixed(0)}ms` : '—';
+
+  const historialEl = document.getElementById('pHistorial');
+  historialEl.innerHTML = '';
+  try {
+    const pings = await apiFetch(`/api/dispositivos/${nodeId}/pings?limite=24`);
+    for (const p of pings.reverse()) {
+      const bar = document.createElement('div');
+      bar.className = 'h-bar';
+      if (p.estado === 'up') {
+        bar.style.background = p.latencia_ms && p.latencia_ms > 100 ? '#D97706' : '#16A34A';
+      } else {
+        bar.style.background = '#DC2626';
+      }
+      bar.title = `${p.estado} ${p.latencia_ms ? p.latencia_ms.toFixed(0)+'ms' : ''} ${new Date(p.timestamp).toLocaleTimeString()}`;
+      historialEl.appendChild(bar);
+    }
+  } catch (_) {}
+}
+
+function cerrarPanel() {
+  document.getElementById('panelLateral').classList.remove('abierto');
+}
+
+async function guardarPosiciones() {
+  if (!network) return;
+  const positions = network.getPositions();
+  const posiciones = Object.entries(positions).map(([id, pos]) => ({
+    dispositivo_id: parseInt(id),
+    x: pos.x,
+    y: pos.y,
+  }));
+  try {
+    await apiFetch('/api/topologia/posiciones', {
+      method: 'POST',
+      body: JSON.stringify(posiciones),
+    });
+  } catch (e) {
+    console.error('Error guardando posiciones:', e);
+  }
+}
+
+function autoAcomodar() {
+  if (!network) return;
+  network.setOptions({ physics: { enabled: true, solver: 'forceAtlas2Based', stabilization: { iterations: 200 } } });
+  network.once('stabilizationIterationsDone', function() {
+    network.setOptions({ physics: { enabled: false } });
+    guardarPosiciones();
+  });
+}
+
+function togglePoll() {
+  const btn = document.getElementById('btnPoll');
+  if (pollActivo) {
+    clearInterval(pollIntervalId);
+    pollActivo = false;
+    btn.textContent = '▶ Monitorear';
+    document.getElementById('pollBadge').textContent = '⏹ detenido';
+    document.getElementById('contador').textContent = '—';
+  } else {
+    pollActivo = true;
+    btn.textContent = '⏸ Detener';
+    document.getElementById('pollBadge').textContent = '▶ activo';
+    pollContador = 0;
+    pollIntervalId = setInterval(() => {
+      cargarTopologia();
+      pollContador++;
+      document.getElementById('contador').textContent = `⏱ ${pollContador * 10}s`;
+    }, 10000);
+    document.getElementById('contador').textContent = '⏱ 0s';
+  }
+}
+
+function actualizarLeyendaSegmentos() {
+  const segs = [...new Set(nodosData.filter(n => n.segmento).map(n => n.segmento))];
+  const el = document.getElementById('leyendaSegmentos');
+  if (segs.length === 0) { el.innerHTML = ''; return; }
+  const colores = ['#0EA5A0','#8B5CF6','#F59E0B','#EF4444','#3B82F6','#EC4899'];
+  el.innerHTML = '<div style="margin-bottom:4px;color:var(--muted);font-size:9px;">SEGMENTOS</div>'
+    + segs.map((s, i) =>
+      `<div class="leyenda-item"><span class="leyenda-dot" style="background:${colores[i % colores.length]}"></span> ${s}</div>`
+    ).join('');
+}
+
+cargarTopologia();
+</script>
+</body>
+</html>

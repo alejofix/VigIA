@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VigIA — Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:      #0D1117;
+    --surface: #161B22;
+    --hover:   #1F2937;
+    --teal:    #0EA5A0;
+    --teal-lt: #5EEAD4;
+    --teal-glow: rgba(14,165,160,0.15);
+    --text:    #F0F6FC;
+    --muted:   #8B949E;
+    --up:      #22C55E;
+    --up-bg:   rgba(34,197,94,0.08);
+    --warn:    #F59E0B;
+    --warn-bg: rgba(245,158,11,0.08);
+    --down:    #EF4444;
+    --down-bg: rgba(239,68,68,0.08);
+    --border:  #30363D;
+    --font:    'JetBrains Mono', monospace;
+    --radius:  8px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 13px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(14,165,160,0.015) 2px, rgba(14,165,160,0.015) 4px);
+    pointer-events: none;
+    z-index: 999;
+  }
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 56px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .logo { font-size: 20px; font-weight: 700; color: var(--teal); letter-spacing: -1px; }
+  .logo span { font-weight: 300; color: var(--teal-lt); }
+  .header-right { display: flex; align-items: center; gap: 16px; }
+  .badge { background: rgba(14,165,160,0.1); border: 1px solid rgba(14,165,160,0.3); color: var(--teal); font-size: 10px; padding: 3px 8px; border-radius: 20px; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; transition: border-color 0.2s, box-shadow 0.2s; }
+  .stat-card:hover { border-color: rgba(14,165,160,0.3); box-shadow: 0 0 20px rgba(14,165,160,0.05); }
+  .stat-num { font-size: 28px; font-weight: 700; color: var(--teal-lt); }
+  .stat-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 4px; }
+  .stat-card.up { border-left: 3px solid var(--up); }
+  .stat-card.up .stat-num { color: var(--up); }
+  .stat-card.down { border-left: 3px solid var(--down); }
+  .stat-card.down .stat-num { color: var(--down); }
+  .stat-card.warn { border-left: 3px solid var(--warn); }
+  .stat-card.warn .stat-num { color: var(--warn); }
+  .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  thead { background: var(--hover); border-bottom: 1px solid var(--border); }
+  th { padding: 10px 14px; text-align: left; color: var(--teal); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600; white-space: nowrap; }
+  td { padding: 10px 14px; color: var(--muted); border-bottom: 1px solid rgba(48,54,61,0.4); font-family: var(--font); transition: background 0.15s; }
+  tr:last-child td { border-bottom: none; }
+  tbody tr { transition: background 0.1s; }
+  tbody tr:hover td { background: rgba(14,165,160,0.08); }
+  tbody tr:hover + tr td { border-top-color: transparent; }
+  td:first-child { color: var(--text); font-weight: 500; }
+  .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; box-shadow: 0 0 6px rgba(0,0,0,0.3); }
+  .dot-up { background: var(--up); box-shadow: 0 0 6px rgba(34,197,94,0.4); }
+  .dot-down { background: var(--down); box-shadow: 0 0 6px rgba(239,68,68,0.4); }
+  .dot-warn { background: var(--warn); box-shadow: 0 0 6px rgba(245,158,11,0.4); }
+  .dot-unknown { background: var(--border); }
+  .tipo-tag { background: rgba(14,165,160,0.08); border: 1px solid rgba(14,165,160,0.2); border-radius: 4px; padding: 2px 8px; font-size: 10px; color: var(--teal-lt); }
+  .controles { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .btn {
+    background: var(--surface); border: 1px solid var(--border); color: var(--muted);
+    padding: 6px 14px; border-radius: var(--radius); font-family: var(--font);
+    font-size: 11px; cursor: pointer; transition: all 0.2s;
+  }
+  .btn:hover { border-color: var(--teal); color: var(--teal-lt); background: rgba(14,165,160,0.05); }
+  .btn-primary { background: rgba(14,165,160,0.12); border-color: rgba(14,165,160,0.4); color: var(--teal-lt); }
+  .btn-primary:hover { background: rgba(14,165,160,0.25); border-color: var(--teal); }
+  .btn-sm { padding: 3px 8px; font-size: 13px; line-height: 1; }
+  .contador { color: var(--muted); font-size: 11px; margin-left: auto; }
+  @keyframes refreshPulse { 0%{opacity:1;} 50%{opacity:0.5;} 100%{opacity:1;} }
+  .refreshing #tablaBody { animation: refreshPulse 0.4s ease; }
+  .toast {
+    position: fixed; bottom: 24px; right: 24px; background: var(--teal); color: #000;
+    padding: 10px 18px; border-radius: var(--radius); font-size: 12px;
+    font-weight: 600; opacity: 0; transition: opacity 0.3s; z-index: 10000;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+    z-index: 1000; align-items: center; justify-content: center;
+  }
+  .modal-overlay.active { display: flex; }
+  .modal {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 24px; width: 400px; max-width: 90vw;
+  }
+  .modal.wide { width: 720px; }
+  .modal h3 { color: var(--teal-lt); margin-bottom: 16px; font-size: 14px; }
+  .modal input { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    padding: 8px 12px; border-radius: var(--radius); font-family: var(--font); font-size: 12px;
+    margin-bottom: 12px; }
+  .modal input:focus { outline: none; border-color: var(--teal); }
+  .modal-btns { display: flex; gap: 8px; justify-content: flex-end; }
+</style>
+</head>
+<body>
+  <header class="header">
+    <div class="logo">Vig<span>IA</span></div>
+    <div class="header-right">
+      <span class="badge">v0.1</span>
+      <span class="badge" id="clienteBadge">red_cliente</span>
+      <button class="btn" onclick="mostrarModalCliente()" style="font-size:10px;padding:2px 8px;">⬇ cliente</button>
+      <span class="badge" id="pollBadge">⏹ detenido</span>
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="stats">
+      <div class="stat-card"><div class="stat-num" id="numTotal">0</div><div class="stat-label">Dispositivos</div></div>
+      <div class="stat-card up"><div class="stat-num" id="numUp">0</div><div class="stat-label">Activos</div></div>
+      <div class="stat-card down"><div class="stat-num" id="numDown">0</div><div class="stat-label">Caidos</div></div>
+      <div class="stat-card warn"><div class="stat-num" id="numAlertas">0</div><div class="stat-label">Alertas</div></div>
+    </div>
+
+      <div class="controles">
+      <button class="btn" onclick="mostrarModalScan()">+ Escanear</button>
+      <button class="btn btn-primary" id="btnPoll" onclick="togglePoll()">▶ Monitorear</button>
+      <button class="btn" onclick="cargarDatos()">⟳ Recargar</button>
+      <button class="btn" onclick="generarReporte('html')">📄 Reporte HTML</button>
+      <button class="btn" onclick="generarReporte('txt')">📃 Reporte TXT</button>
+      <a href="/mapa" class="btn" target="_blank">🗺 Mapa</a>
+      <span class="contador" id="contador">—</span>
+      <span id="statusMsg" style="font-size:10px;color:var(--warn);"></span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>IP</th><th>Hostname</th><th>MAC</th><th>Fabricante</th><th>Tipo</th><th>Estado</th><th>Latencia</th><th>Ultima vez</th><th></th>
+        </tr></thead>
+        <tbody id="tablaBody"></tbody>
+      </table>
+    </div>
+
+    <div style="display:flex;gap:24px;margin-top:32px;flex-wrap:wrap;">
+      <div style="flex:2;min-width:300px;">
+        <div class="stat-label" style="margin-bottom:12px;color:var(--warn);display:flex;align-items:center;gap:8px;">
+          <span>Alertas recientes</span>
+          <button class="btn" onclick="borrarAlertas()" style="font-size:10px;padding:2px 8px;color:var(--down);">✕ Borrar</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Fecha</th><th>Dispositivo</th><th>Tipo</th><th>Mensaje</th><th></th></tr></thead>
+            <tbody id="alertasBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div style="flex:1;min-width:280px;">
+        <div class="stat-label" style="margin-bottom:12px;color:var(--teal);">Chat IA</div>
+        <div id="chatBox" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;height:300px;overflow-y:auto;margin-bottom:8px;font-size:12px;line-height:1.6;">
+          <div style="color:var(--muted);font-style:italic;">Pregunta sobre el estado de la red...</div>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <input id="chatInput" placeholder="Ej: cuantas camaras estan caidas?" style="flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:var(--radius);font-family:var(--font);font-size:11px;">
+          <button class="btn btn-primary" onclick="enviarChat()">→</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modalScan">
+    <div class="modal">
+      <h3>Escaneo de red</h3>
+      <input id="inputRango" placeholder="Rangos separados por coma (ej: 192.168.1.0/24, 192.168.2.0/24)">
+      <input id="inputCliente" placeholder="Nombre del cliente">
+      <div class="modal-btns">
+        <button class="btn" onclick="cerrarModalScan()">Cancelar</button>
+        <button class="btn btn-primary" onclick="iniciarScan()">Escanear</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modalCliente">
+    <div class="modal">
+      <h3>Cambiar cliente</h3>
+      <select id="selectCliente" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;margin-bottom:12px;"></select>
+      <div class="modal-btns">
+        <button class="btn" onclick="cerrarModalCliente()">Cancelar</button>
+        <button class="btn btn-primary" onclick="cambiarCliente()">Cambiar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modalServicios">
+    <div class="modal wide">
+      <h3 id="serviciosTitle">Servicios</h3>
+      <div id="serviciosBody" style="max-height:400px;overflow-y:auto;font-size:12px;"></div>
+      <div class="modal-btns" style="margin-top:12px;">
+        <button class="btn" onclick="cerrarModalServicios()">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modalCredenciales">
+    <div class="modal" style="width:460px;">
+      <h3 id="credencialesTitle">Credenciales</h3>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div id="serialGroupReadonly" style="display:none;flex-direction:column;gap:4px;">
+          <label style="font-size:11px;color:var(--muted);">Número de serie <span style="color:var(--teal);">autodetectado por SNMP</span></label>
+          <span id="spanSerial" style="color:var(--text);padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:var(--font);"></span>
+        </div>
+        <div id="serialGroupManual" style="display:none;flex-direction:column;gap:4px;">
+          <label style="font-size:11px;color:var(--muted);">Número de serie <span style="color:var(--warn);">no detectado</span></label>
+          <input id="inputSerial" type="text" placeholder="ingresar serial manualmente" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
+        </div>
+        <label style="font-size:11px;color:var(--muted);">Contraseña de administración</label>
+        <input id="inputAdminPass" type="text" placeholder="admin password" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
+        <label style="font-size:11px;color:var(--muted);">Usuario (nombre / cel / correo) <span style="color:var(--teal);">opcional</span></label>
+        <input id="inputUsuario" placeholder="usuario" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
+        <label style="font-size:11px;color:var(--muted);">Contraseña de app <span style="color:var(--teal);">opcional</span></label>
+        <input id="inputAppPass" type="password" placeholder="app password" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
+        <label style="font-size:11px;color:var(--muted);">Observación</label>
+        <textarea id="inputObservacion" placeholder="ej: credencial por defecto del fabricante" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;resize:vertical;"></textarea>
+      </div>
+      <div class="modal-btns" style="margin-top:14px;">
+        <button class="btn" onclick="cerrarModalCredenciales()">Cancelar</button>
+        <button class="btn btn-primary" onclick="guardarCredenciales()">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+let pollIntervalId = null;
+let pollContador = 0;
+let pollActivo = false;
+
+var API_BASE = '';
+if (window.location.port === '' || window.location.port === '80' || window.location.port === '443') {
+  API_BASE = 'http://localhost:8080';
+}
+
+async function apiFetch(url, opts = {}) {
+  const resp = await fetch(API_BASE + url, {
+    headers: { 'Content-Type': 'application/json', ...opts.headers },
+    ...opts,
+  });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return resp.json();
+}
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+async function cargarStats() {
+  try {
+    const s = await apiFetch('/api/stats');
+    document.getElementById('numTotal').textContent = s.total_dispositivos;
+    document.getElementById('numUp').textContent = s.activos;
+    document.getElementById('numDown').textContent = s.caidos;
+    document.getElementById('numAlertas').textContent = s.alertas_pendientes;
+  } catch (e) { console.error('Stats error:', e); }
+}
+
+async function cargarDispositivos() {
+  try {
+    const data = await apiFetch('/api/dispositivos');
+    const tbody = document.getElementById('tablaBody');
+    tbody.innerHTML = '';
+
+    const ultimosPings = {};
+    for (const d of data) {
+      try {
+        const pings = await apiFetch(`/api/dispositivos/${d.id}/pings?limite=1`);
+        if (pings.length > 0) ultimosPings[d.id] = pings[0];
+      } catch (_) {}
+    }
+
+    let upCount = 0, downCount = 0;
+    for (const d of data) {
+      const ping = ultimosPings[d.id];
+      const estado = ping ? ping.estado : 'desconocido';
+      const latencia = ping ? ping.latencia_ms : null;
+      const ultima = d.ultima_vez ? new Date(d.ultima_vez).toLocaleString() : '—';
+
+      let dotClass = 'dot-unknown';
+      if (estado === 'up') { dotClass = 'dot-up'; upCount++; }
+      else if (estado === 'down') { dotClass = 'dot-down'; downCount++; }
+      else if (estado === 'timeout') { dotClass = 'dot-warn'; }
+
+      const latStr = latencia !== null ? `${latencia.toFixed(0)}ms` : '—';
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${d.ip}</td>
+        <td>${d.hostname || '—'}</td>
+        <td style="font-size:10px;color:var(--muted);font-family:monospace;">${d.mac || '—'}</td>
+        <td style="font-size:10px;color:var(--muted);">${d.fabricante || '—'}</td>
+        <td><span class="tipo-tag">${d.tipo || 'desconocido'}</span></td>
+        <td><span class="status-dot ${dotClass}"></span>${estado}</td>
+        <td>${latStr}</td>
+        <td>${ultima}</td>
+        <td><button class="btn btn-sm" onclick="verServicios(${d.id}, '${d.ip}')">🔍</button> <button class="btn btn-sm" onclick="verCredenciales(${d.id}, '${d.ip}')">🔑</button></td>
+      `;
+      tbody.appendChild(tr);
+    }
+  } catch (e) { console.error('Dispositivos error:', e); }
+}
+
+async function cargarAlertas() {
+  try {
+    const data = await apiFetch('/api/alertas?resuelta=0');
+    const tbody = document.getElementById('alertasBody');
+    tbody.innerHTML = '';
+
+    for (const a of data) {
+      let dispIp = '—';
+      try {
+        const d = await apiFetch(`/api/dispositivos/${a.dispositivo_id}`);
+        dispIp = d.ip;
+      } catch (_) {}
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="white-space:nowrap">${new Date(a.timestamp).toLocaleString()}</td>
+        <td>${dispIp}</td>
+        <td><span class="tipo-tag">${a.tipo}</span></td>
+        <td>${a.mensaje || '—'}</td>
+        <td><button class="btn" onclick="resolver(${a.id})">✓</button></td>
+      `;
+      tbody.appendChild(tr);
+    }
+  } catch (e) { console.error('Alertas error:', e); }
+}
+
+async function resolver(id) {
+  await apiFetch(`/api/alertas/${id}/resolver`, { method: 'POST' });
+  toast('Alerta resuelta');
+  cargarAlertas();
+  cargarStats();
+}
+
+async function cargarDatos() {
+  document.body.classList.add('refreshing');
+  const statusEl = document.getElementById('statusMsg');
+  statusEl.textContent = 'cargando...';
+  try {
+    await Promise.all([cargarStats(), cargarDispositivos(), cargarAlertas()]);
+    statusEl.textContent = '';
+  } catch (e) {
+    statusEl.textContent = 'Error al cargar';
+    console.error('cargarDatos error:', e);
+  }
+  setTimeout(() => document.body.classList.remove('refreshing'), 500);
+}
+
+async function generarReporte(formato) {
+  const cliente = document.getElementById('clienteBadge').textContent;
+  toast(`Generando reporte ${formato.toUpperCase()}...`);
+  try {
+    const res = await apiFetch('/api/reporte?nombre_cliente=' + encodeURIComponent(cliente) + '&formato=' + formato, {
+      method: 'POST',
+    });
+    toast(`Reporte ${formato.toUpperCase()} generado: ${res.ruta}`);
+  } catch (e) {
+    toast('Error: ' + e.message);
+  }
+}
+
+async function enviarChat() {
+  const input = document.getElementById('chatInput');
+  const pregunta = input.value.trim();
+  if (!pregunta) return;
+  input.value = '';
+  const chatBox = document.getElementById('chatBox');
+  chatBox.innerHTML += `<div style="color:var(--teal-lt);margin-bottom:4px;"><strong>Tu:</strong> ${pregunta}</div>`;
+  chatBox.innerHTML += `<div style="color:var(--muted);font-style:italic;margin-bottom:8px;">Pensando...</div>`;
+  chatBox.scrollTop = chatBox.scrollHeight;
+
+  const cliente = document.getElementById('clienteBadge').textContent;
+  try {
+    const res = await apiFetch('/api/chat', {
+      method: 'POST',
+      body: JSON.stringify({ pregunta: pregunta, nombre_cliente: cliente }),
+    });
+    chatBox.querySelector('div:last-child').remove();
+    chatBox.innerHTML += `<div style="color:var(--teal);margin-bottom:12px;border-left:2px solid var(--teal);padding-left:8px;">${res.respuesta}</div>`;
+  } catch (e) {
+    chatBox.querySelector('div:last-child').remove();
+    chatBox.innerHTML += `<div style="color:var(--down);margin-bottom:8px;">Error: ${e.message}</div>`;
+  }
+  chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+document.getElementById('chatInput').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') enviarChat();
+});
+
+function mostrarModalScan() {
+  document.getElementById('modalScan').classList.add('active');
+  document.getElementById('inputRango').value = '192.168.1.0/24';
+  document.getElementById('inputCliente').value = 'red_cliente';
+}
+
+function cerrarModalScan() {
+  document.getElementById('modalScan').classList.remove('active');
+}
+
+async function iniciarScan() {
+  const rango = document.getElementById('inputRango').value.trim();
+  const cliente = document.getElementById('inputCliente').value.trim() || 'red_cliente';
+  if (!rango) { toast('Ingresa un rango IP'); return; }
+  cerrarModalScan();
+  document.getElementById('clienteBadge').textContent = cliente;
+  try {
+    const res = await apiFetch('/api/scan', {
+      method: 'POST',
+      body: JSON.stringify({ rango_ip: rango, nombre_cliente: cliente }),
+    });
+    toast(res.mensaje || 'Escaneo iniciado');
+    esperarScan(cliente);
+  } catch (e) {
+    if (e.message.includes('409')) {
+      toast('Ya hay un escaneo en progreso. Espera...');
+      esperarScan(cliente);
+    } else {
+      toast('Error: ' + e.message);
+    }
+  }
+}
+
+async function esperarScan(cliente) {
+  const check = setInterval(async () => {
+    try {
+      const est = await apiFetch('/api/scan/estado?nombre_cliente=' + encodeURIComponent(cliente));
+      if (est.estado === 'completo') {
+        clearInterval(check);
+        const r = est.resultado || {};
+        toast(`Escaneo completo: ${r.total || 0} hosts (${r.nuevos || 0} nuevos)`);
+        cargarDatos();
+      } else if (est.estado === 'error') {
+        clearInterval(check);
+        toast('Error: ' + (est.error || 'desconocido'));
+      } else if (est.estado === 'inactivo') {
+        clearInterval(check);
+      }
+    } catch (_) { clearInterval(check); }
+  }, 3000);
+}
+
+async function mostrarModalCliente() {
+  document.getElementById('modalCliente').classList.add('active');
+  const select = document.getElementById('selectCliente');
+  select.innerHTML = '<option value="">Cargando...</option>';
+  try {
+    const res = await apiFetch('/api/clientes');
+    select.innerHTML = '';
+    for (const c of res.clientes) {
+      const opt = document.createElement('option');
+      opt.value = c;
+      opt.textContent = c;
+      if (c === res.activo) opt.selected = true;
+      select.appendChild(opt);
+    }
+    if (res.clientes.length === 0) {
+      select.innerHTML = '<option value="">Sin clientes</option>';
+    }
+  } catch (e) {
+    select.innerHTML = '<option value="">Error cargando</option>';
+  }
+}
+
+function cerrarModalCliente() {
+  document.getElementById('modalCliente').classList.remove('active');
+}
+
+async function cambiarCliente() {
+  const select = document.getElementById('selectCliente');
+  const cliente = select.value;
+  if (!cliente) { toast('Selecciona un cliente'); return; }
+  cerrarModalCliente();
+  try {
+    await apiFetch('/api/clientes/switch', {
+      method: 'POST',
+      body: JSON.stringify({ nombre_cliente: cliente }),
+    });
+    document.getElementById('clienteBadge').textContent = cliente;
+    toast('Cliente cambiado a: ' + cliente);
+    cargarDatos();
+  } catch (e) {
+    toast('Error: ' + e.message);
+  }
+}
+
+function togglePoll() {
+  const btn = document.getElementById('btnPoll');
+  if (pollActivo) {
+    clearInterval(pollIntervalId);
+    pollActivo = false;
+    btn.textContent = '▶ Monitorear';
+    document.getElementById('pollBadge').textContent = '⏹ detenido';
+    document.getElementById('contador').textContent = '—';
+  } else {
+    pollActivo = true;
+    btn.textContent = '⏸ Detener';
+    document.getElementById('pollBadge').textContent = '▶ activo';
+    pollContador = 0;
+    pollIntervalId = setInterval(async () => {
+      try {
+        await apiFetch('/api/poll?nombre_cliente=' + document.getElementById('clienteBadge').textContent);
+        cargarDatos();
+      } catch (_) {}
+    }, 30000);
+    actualizarContador();
+    toast('Monitoreo iniciado (cada 30s)');
+  }
+}
+
+function actualizarContador() {
+  if (!pollActivo) return;
+  pollContador++;
+  document.getElementById('contador').textContent = `⏱ ${pollContador * 30}s`;
+  setTimeout(actualizarContador, 30000);
+}
+
+async function verServicios(id, ip) {
+  try {
+    const data = await apiFetch(`/api/dispositivos/${id}/servicios`);
+    const abiertos = data.filter(s => s.estado === 'open');
+    const webPorts = abiertos.filter(s => s.puerto === 80 || s.puerto === 443 || s.puerto === 8080 || s.puerto === 8443);
+    document.getElementById('serviciosTitle').textContent = `Servicios - ${ip}`;
+    let html = `<div style="color:var(--muted);font-size:11px;margin-bottom:10px;">${abiertos.length} servicios abiertos${webPorts.length ? ` (${webPorts.length} web)` : ''}</div>`;
+    if (webPorts.length > 0) {
+      html += '<div style="margin-bottom:10px;display:flex;gap:6px;flex-wrap:wrap;">';
+      for (const w of webPorts) {
+        const proto = w.puerto === 443 || w.puerto === 8443 ? 'https' : 'http';
+        html += `<a href="${proto}://${ip}:${w.puerto}" target="_blank" style="background:var(--accent, #0EA5A0);color:#fff;padding:4px 10px;border-radius:var(--radius);text-decoration:none;font-size:11px;">🌐 ${proto.toUpperCase()} :${w.puerto}</a>`;
+      }
+      html += '</div>';
+    }
+    if (data.length === 0) {
+      html = '<div style="color:var(--muted);padding:12px;text-align:center;">Sin servicios detectados</div>';
+    } else {
+      html += '<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:var(--bg);">';
+      html += '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);">Puerto</th>';
+      html += '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);">Proto</th>';
+      html += '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);">Servicio</th>';
+      html += '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);">Version</th>';
+      html += '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);">Estado</th></tr></thead><tbody>';
+      for (const s of data) {
+        const isWeb = s.estado === 'open' && (s.puerto === 80 || s.puerto === 443 || s.puerto === 8080 || s.puerto === 8443);
+        const bg = isWeb ? 'background:rgba(0,200,83,0.06);' : (s.estado === 'open' ? '' : 'background:rgba(220,38,38,0.06);');
+        html += `<tr style="${bg}">`;
+        html += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);font-weight:600;">${s.puerto}</td>`;
+        html += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);">${s.protocolo || '—'}</td>`;
+        html += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);">${s.servicio || '—'}${isWeb ? ' 🌐' : ''}</td>`;
+        html += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);color:var(--muted);font-size:10px;">${s.version || '—'}</td>`;
+        html += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);"><span class="status-dot ${s.estado === 'open' ? 'dot-up' : 'dot-down'}"></span>${s.estado || '—'}</td>`;
+        html += '</tr>';
+      }
+      html += '</tbody></table>';
+    }
+    document.getElementById('serviciosBody').innerHTML = html;
+    document.getElementById('modalServicios').classList.add('active');
+  } catch (e) {
+    console.error('Servicios error:', e);
+    toast('Error al cargar servicios');
+  }
+}
+
+function cerrarModalServicios() {
+  document.getElementById('modalServicios').classList.remove('active');
+}
+
+let _credencialId = null;
+
+async function verCredenciales(id, ip) {
+  _credencialId = id;
+  document.getElementById('credencialesTitle').textContent = `Credenciales - ${ip}`;
+  document.getElementById('inputSerial').value = '';
+  document.getElementById('inputAdminPass').value = '';
+  document.getElementById('inputUsuario').value = '';
+  document.getElementById('inputAppPass').value = '';
+  document.getElementById('inputObservacion').value = '';
+  document.getElementById('serialGroupReadonly').style.display = 'none';
+  document.getElementById('serialGroupManual').style.display = 'none';
+  try {
+    const data = await apiFetch(`/api/dispositivos/${id}/credenciales`);
+    if (data) {
+      if (data.serial) {
+        document.getElementById('spanSerial').textContent = data.serial;
+        document.getElementById('serialGroupReadonly').style.display = 'flex';
+      } else {
+        document.getElementById('serialGroupManual').style.display = 'flex';
+      }
+      document.getElementById('inputAdminPass').value = data.admin_pass || '';
+      document.getElementById('inputUsuario').value = data.usuario || '';
+      document.getElementById('inputAppPass').value = data.app_pass || '';
+      document.getElementById('inputObservacion').value = data.observacion || '';
+    } else {
+      document.getElementById('serialGroupManual').style.display = 'flex';
+    }
+  } catch (_) {
+    document.getElementById('serialGroupManual').style.display = 'flex';
+  }
+  document.getElementById('modalCredenciales').classList.add('active');
+}
+
+async function guardarCredenciales() {
+  const data = {
+    dispositivo_id: _credencialId,
+    serial: document.getElementById('serialGroupManual').style.display !== 'none'
+      ? document.getElementById('inputSerial').value
+      : document.getElementById('spanSerial').textContent,
+    admin_pass: document.getElementById('inputAdminPass').value,
+    usuario: document.getElementById('inputUsuario').value,
+    app_pass: document.getElementById('inputAppPass').value,
+    observacion: document.getElementById('inputObservacion').value,
+  };
+  try {
+    await apiFetch(`/api/dispositivos/${_credencialId}/credenciales`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    cerrarModalCredenciales();
+    toast('Credenciales guardadas');
+  } catch (e) {
+    toast('Error al guardar');
+  }
+}
+
+function cerrarModalCredenciales() {
+  document.getElementById('modalCredenciales').classList.remove('active');
+  _credencialId = null;
+}
+
+async function borrarAlertas() {
+  if (!confirm('¿Borrar todas las alertas?')) return;
+  try {
+    await apiFetch('/api/alertas', { method: 'DELETE' });
+    cargarDatos();
+    toast('Alertas eliminadas');
+  } catch (e) {
+    toast('Error al borrar alertas');
+  }
+}
+
+cargarDatos();
+setInterval(cargarDatos, 30000);
+togglePoll();
+</script>
+</body>
+</html>
