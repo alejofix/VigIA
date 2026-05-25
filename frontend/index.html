@@ -138,6 +138,7 @@
       <span class="badge" id="clienteBadge">red_cliente</span>
       <button class="btn" onclick="mostrarModalCliente()" style="font-size:10px;padding:2px 8px;">⬇ cliente</button>
       <span class="badge" id="pollBadge">⏹ detenido</span>
+      <button class="btn" onclick="mostrarIPPublica()" style="font-size:10px;padding:2px 8px;">🌐 IP Pública</button>
     </div>
   </header>
 
@@ -268,6 +269,19 @@
 
   <div class="toast" id="toast"></div>
 
+<div class="modal-overlay" id="modalPublicIP">
+  <div class="modal">
+    <h3>Información de IP Pública</h3>
+    <div id="publicIpInfo" style="font-size:12px;line-height:1.6;margin-bottom:16px;">
+      <!-- Aquí se cargará la información de la IP -->
+      Cargando...
+    </div>
+    <div class="modal-btns">
+      <button class="btn" onclick="cerrarModalPublicIP()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 let pollIntervalId = null;
 let pollContador = 0;
@@ -285,6 +299,48 @@ async function apiFetch(url, opts = {}) {
   });
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   return resp.json();
+}
+
+async function apiFetch(url, opts = {}) {
+  const resp = await fetch(API_BASE + url, {
+    headers: { 'Content-Type': 'application/json', ...opts.headers },
+    ...opts,
+  });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return resp.json();
+}
+
+async function mostrarIPPublica() {
+  document.getElementById('modalPublicIP').classList.add('active');
+  const ipInfoDiv = document.getElementById('publicIpInfo');
+  ipInfoDiv.innerHTML = 'Cargando...';
+
+  try {
+    const response = await fetch('https://ipapi.co/json/');
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    const data = await response.json();
+
+    ipInfoDiv.innerHTML = `
+      <strong>IP:</strong> ${data.ip}<br>
+      <strong>Ciudad:</strong> ${data.city}<br>
+      <strong>Región:</strong> ${data.region}<br>
+      <strong>País:</strong> ${data.country_name} (${data.country_code})<br>
+      <strong>Código Postal:</strong> ${data.postal}<br>
+      <strong>Latitud:</strong> ${data.latitude}<br>
+      <strong>Longitud:</strong> ${data.longitude}<br>
+      <strong>Organización:</strong> ${data.org}<br>
+      <strong>ASN:</strong> ${data.asn}<br>
+      <strong>Zona Horaria:</strong> ${data.timezone}<br>
+      <strong>Moneda:</strong> ${data.currency}
+    `;
+  } catch (e) {
+    ipInfoDiv.innerHTML = `<span style="color:var(--down);">Error al cargar la información de IP: ${e.message}</span>`;
+    console.error('Error fetching public IP:', e);
+  }
+}
+
+function cerrarModalPublicIP() {
+  document.getElementById('modalPublicIP').classList.remove('active');
 }
 
 function toast(msg) {
