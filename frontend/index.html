@@ -19,6 +19,8 @@
     --up-bg:   rgba(34,197,94,0.08);
     --warn:    #F59E0B;
     --warn-bg: rgba(245,158,11,0.08);
+    --degradado:    #F97316;
+    --degradado-bg: rgba(249,115,22,0.08);
     --down:    #EF4444;
     --down-bg: rgba(239,68,68,0.08);
     --border:  #30363D;
@@ -82,6 +84,7 @@
   td:first-child { color: var(--text); font-weight: 500; }
   .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; box-shadow: 0 0 6px rgba(0,0,0,0.3); }
   .dot-up { background: var(--up); box-shadow: 0 0 6px rgba(34,197,94,0.4); }
+  .dot-degradado { background: var(--degradado); box-shadow: 0 0 6px rgba(249,115,22,0.5); }
   .dot-down { background: var(--down); box-shadow: 0 0 6px rgba(239,68,68,0.4); }
   .dot-warn { background: var(--warn); box-shadow: 0 0 6px rgba(245,158,11,0.4); }
   .dot-unknown { background: var(--border); }
@@ -139,6 +142,7 @@
     <div class="stats">
       <div class="stat-card"><div class="stat-num" id="numTotal">0</div><div class="stat-label">Dispositivos</div></div>
       <div class="stat-card up"><div class="stat-num" id="numUp">0</div><div class="stat-label">Activos</div></div>
+      <div class="stat-card" style="border-left-color:var(--degradado);"><div class="stat-num" id="numDegradados">0</div><div class="stat-label" style="color:var(--degradado);">Degradados</div></div>
       <div class="stat-card down"><div class="stat-num" id="numDown">0</div><div class="stat-label">Caidos</div></div>
       <div class="stat-card warn"><div class="stat-num" id="numAlertas">0</div><div class="stat-label">Alertas</div></div>
     </div>
@@ -289,6 +293,7 @@ async function cargarStats() {
     const s = await apiFetch('/api/stats');
     document.getElementById('numTotal').textContent = s.total_dispositivos;
     document.getElementById('numUp').textContent = s.activos;
+    document.getElementById('numDegradados').textContent = s.degradados;
     document.getElementById('numDown').textContent = s.caidos;
     document.getElementById('numAlertas').textContent = s.alertas_pendientes;
   } catch (e) { console.error('Stats error:', e); }
@@ -317,6 +322,7 @@ async function cargarDispositivos() {
 
       let dotClass = 'dot-unknown';
       if (estado === 'up') { dotClass = 'dot-up'; upCount++; }
+      else if (estado === 'degradado') { dotClass = 'dot-degradado'; }
       else if (estado === 'down') { dotClass = 'dot-down'; downCount++; }
       else if (estado === 'timeout') { dotClass = 'dot-warn'; }
 

@@ -37,6 +37,8 @@ def hacer_ping(ip: str) -> dict:
             latencia = float(m.group(1)) if m else None
             perdida_m = re.search(r'(\d+)% packet loss', proc.stdout)
             perdida = float(perdida_m.group(1)) if perdida_m else 0
+            if perdida > 0 or (latencia and latencia > 444):
+                return {"estado": "degradado", "latencia_ms": latencia, "perdida_pct": perdida}
             return {"estado": "up", "latencia_ms": latencia, "perdida_pct": perdida}
         else:
             perdida_m = re.search(r'(\d+)% packet loss', proc.stdout)
@@ -61,33 +63,37 @@ def procesar_dispositivo(session: Session, dispositivo: Dispositivo):
     )
     session.add(ping)
 
-    if estado_anterior == "up" and resultado["estado"] == "down":
-        alerta = Alerta(
-            dispositivo_id=dispositivo.id,
-            tipo="caida",
-            mensaje=f"Dispositivo {dispositivo.ip} caido tras estar activo",
-        )
-        session.add(alerta)
-        logger.warning(f"ALERTA: {dispositivo.ip} paso de UP a DOWN")
-        notificar(
-            f"Caida: {dispositivo.ip}",
-            f"Dispositivo {dispositivo.ip} ({dispositivo.hostname or 'sin hostname'}) "
-            f"ha caido. Tipo: {dispositivo.tipo or 'desconocido'}.",
-        )
-
-    if resultado["estado"] == "up" and resultado["latencia_ms"] and resultado["latencia_ms"] > 100:
-        alerta = Alerta(
-            dispositivo_id=dispositivo.id,
-            tipo="latencia_alta",
-            mensaje=f"Latencia alta en {dispositivo.ip}: {resultado['latencia_ms']:.1f}ms",
-        )
-        session.add(alerta)
-        logger.warning(f"ALERTA: {dispositivo.ip} latencia alta ({resultado['latencia_ms']:.1f}ms)")
-        notificar(
-            f"Latencia alta: {dispositivo.ip}",
-            f"Latencia de {resultado['latencia_ms']:.0f}ms detectada en "
-            f"{dispositivo.ip} ({dispositivo.hostname or 'sin hostname'}).",
-        )
+    if estado_anterior != resultado["estado"]:
+        if resultado["estado"] == "down":
+            alerta = Alerta(
+                dispositivo_id=dispositivo.id,
+                tipo="caida",
+                mensaje=f"Dispositivo {dispositivo.ip} caido tras estar activo",
+            )
+            session.add(alerta)
+            logger.warning(f"ALERTA: {dispositivo.ip} paso a DOWN")
+            notificar(
+                f"Caida: {dispositivo.ip}",
+                f"Dispositivo {dispositivo.ip} ({dispositivo.hostname or 'sin hostname'}) "
+                f"ha caido. Tipo: {dispositivo.tipo or 'desconocido'}.",
+            )
+        elif resultado["estado"] == "degradado":
+            if resultado["perdida_pct"] and resultado["perdida_pct"] > 0:
+                causa = f"perdida de paquetes {resultado['perdida_pct']:.0f}%"
+            else:
+                causa = f"latencia alta {resultado['latencia_ms']:.0f}ms"
+            alerta = Alerta(
+                dispositivo_id=dispositivo.id,
+                tipo="degradado",
+                mensaje=f"Dispositivo {dispositivo.ip} degradado: {causa}",
+            )
+            session.add(alerta)
+            logger.warning(f"ALERTA: {dispositivo.ip} degradado ({causa})")
+            notificar(
+                f"Degradado: {dispositivo.ip}",
+                f"Dispositivo {dispositivo.ip} ({dispositivo.hostname or 'sin hostname'}) "
+                f"degradado por {causa}.",
+            )
 
     dispositivo.ultima_vez = datetime.now()
 

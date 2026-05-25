@@ -274,10 +274,22 @@ async def stats():
                 .scalar_subquery()
             ),
         ).count()
+        degradados = session.query(Ping).filter(
+            Ping.estado == "degradado",
+            Ping.timestamp == (
+                session.query(Ping.timestamp)
+                .filter(Ping.dispositivo_id == Dispositivo.id)
+                .order_by(Ping.timestamp.desc())
+                .limit(1)
+                .correlate(Dispositivo)
+                .scalar_subquery()
+            ),
+        ).count()
         alertas_pend = session.query(Alerta).filter_by(resuelta=0).count()
         return StatsOut(
             total_dispositivos=total,
             activos=activos,
+            degradados=degradados,
             caidos=caidos,
             alertas_pendientes=alertas_pend,
         )
