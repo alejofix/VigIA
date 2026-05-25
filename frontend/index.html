@@ -324,7 +324,7 @@ async function cargarDispositivos() {
       if (estado === 'up') { dotClass = 'dot-up'; upCount++; }
       else if (estado === 'degradado') { dotClass = 'dot-degradado'; }
       else if (estado === 'down') { dotClass = 'dot-down'; downCount++; }
-      else if (estado === 'timeout') { dotClass = 'dot-warn'; }
+      else if (estado === 'warn') { dotClass = 'dot-warn'; }
 
       const latStr = latencia !== null ? `${latencia.toFixed(0)}ms` : '—';
 

@@ -37,18 +37,20 @@ def hacer_ping(ip: str) -> dict:
             latencia = float(m.group(1)) if m else None
             perdida_m = re.search(r'(\d+)% packet loss', proc.stdout)
             perdida = float(perdida_m.group(1)) if perdida_m else 0
-            if perdida > 0 or (latencia and latencia > 444):
+            if perdida > 0 and latencia and latencia > 1222:
                 return {"estado": "degradado", "latencia_ms": latencia, "perdida_pct": perdida}
+            if latencia and latencia > 444:
+                return {"estado": "warn", "latencia_ms": latencia, "perdida_pct": perdida}
             return {"estado": "up", "latencia_ms": latencia, "perdida_pct": perdida}
         else:
             perdida_m = re.search(r'(\d+)% packet loss', proc.stdout)
             perdida = float(perdida_m.group(1)) if perdida_m else 100
             return {"estado": "down", "latencia_ms": None, "perdida_pct": perdida}
     except subprocess.TimeoutExpired:
-        return {"estado": "timeout", "latencia_ms": None, "perdida_pct": 100}
+        return {"estado": "warn", "latencia_ms": None, "perdida_pct": 100}
     except Exception as e:
         logger.error(f"Error inesperado ping a {ip}: {e}")
-        return {"estado": "timeout", "latencia_ms": None, "perdida_pct": 100}
+        return {"estado": "down", "latencia_ms": None, "perdida_pct": 100}
 
 
 def procesar_dispositivo(session: Session, dispositivo: Dispositivo):
@@ -78,22 +80,26 @@ def procesar_dispositivo(session: Session, dispositivo: Dispositivo):
                 f"ha caido. Tipo: {dispositivo.tipo or 'desconocido'}.",
             )
         elif resultado["estado"] == "degradado":
-            if resultado["perdida_pct"] and resultado["perdida_pct"] > 0:
-                causa = f"perdida de paquetes {resultado['perdida_pct']:.0f}%"
-            else:
-                causa = f"latencia alta {resultado['latencia_ms']:.0f}ms"
             alerta = Alerta(
                 dispositivo_id=dispositivo.id,
                 tipo="degradado",
-                mensaje=f"Dispositivo {dispositivo.ip} degradado: {causa}",
+                mensaje=f"Dispositivo {dispositivo.ip} degradado: perdida {resultado['perdida_pct']:.0f}%, latencia {resultado['latencia_ms']:.0f}ms",
             )
             session.add(alerta)
-            logger.warning(f"ALERTA: {dispositivo.ip} degradado ({causa})")
+            logger.warning(f"ALERTA: {dispositivo.ip} degradado")
             notificar(
                 f"Degradado: {dispositivo.ip}",
                 f"Dispositivo {dispositivo.ip} ({dispositivo.hostname or 'sin hostname'}) "
-                f"degradado por {causa}.",
+                f"degradado por perdida de paquetes y latencia alta.",
             )
+        elif resultado["estado"] == "warn":
+            alerta = Alerta(
+                dispositivo_id=dispositivo.id,
+                tipo="latencia_alta",
+                mensaje=f"Latencia alta en {dispositivo.ip}: {resultado['latencia_ms']:.0f}ms",
+            )
+            session.add(alerta)
+            logger.warning(f"ALERTA: {dispositivo.ip} latencia alta ({resultado['latencia_ms']:.0f}ms)")
 
     dispositivo.ultima_vez = datetime.now()
 

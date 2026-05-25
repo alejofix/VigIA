@@ -221,7 +221,7 @@ function colorEstado(estado, latencia) {
     return { background: '#16A34A', border: '#15803D' };
   }
   if (estado === 'degradado') return { background: '#F97316', border: '#EA580C' };
-  if (estado === 'down' || estado === 'timeout') return { background: '#DC2626', border: '#B91C1C' };
+  if (estado === 'down' || estado === 'warn') return { background: '#DC2626', border: '#B91C1C' };
   return { background: '#30363D', border: '#1F2937' };
 }
 
@@ -325,7 +325,7 @@ async function mostrarPanel(nodeId) {
     }
   } else if (nodo.estado === 'degradado') {
     estadoClase = 'degradado';
-  } else if (nodo.estado === 'down' || nodo.estado === 'timeout') {
+  } else if (nodo.estado === 'down' || nodo.estado === 'warn') {
     estadoClase = 'down';
   }
   document.getElementById('pEstado').innerHTML = `<span class="panel-estado ${estadoClase}">${estadoTexto}</span>`;
