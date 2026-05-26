@@ -592,7 +592,7 @@ SERVICIO_A_TIPO = {
 }
 
 
-PRIORIDAD_TIPO = {"camara": 4, "impresora": 3, "servidor": 2, "router": 1, "dispositivo": 0, "desconocido": -1}
+PRIORIDAD_TIPO = {"camara": 5, "impresora": 4, "servidor": 3, "router": 2, "computadora": 1, "dispositivo": 0, "desconocido": -1}
 
 
 def detectar_tipo(servicios: list) -> str:
@@ -625,7 +625,7 @@ def detectar_tipo_por_hostname(hostname: str) -> str:
     if "server" in h or "servidor" in h or "nas" in h or "synology" in h or "qnap" in h:
         return "servidor"
     if "laptop" in h or "notebook" in h or "desktop" in h or "pc-" in h:
-        return "dispositivo"
+        return "computadora"
     return ""
 
 
@@ -682,7 +682,7 @@ def _agregar_o_actualizar(session, ip, hostname, mac, fabricante, tipo, servicio
         existente.mac = mac or existente.mac
         existente.fabricante = fabricante or existente.fabricante
         if tipo:
-            prioridad = {"camara": 3, "servidor": 2, "router": 1, "dispositivo": 0, "desconocido": -1}
+            prioridad = {"camara": 5, "impresora": 4, "servidor": 3, "router": 2, "computadora": 1, "dispositivo": 0, "desconocido": -1}
             if prioridad.get(tipo, 0) >= prioridad.get(existente.tipo or "", 0):
                 existente.tipo = tipo
         existente.segmento = existente.segmento or segmento_ip

@@ -507,7 +507,7 @@ async function cargarDispositivos() {
         <td>${d.hostname || '—'}</td>
         <td style="font-size:10px;color:var(--muted);font-family:monospace;">${d.mac || '—'}</td>
         <td style="font-size:10px;color:var(--muted);">${d.fabricante || '—'}</td>
-        <td><span class="tipo-tag">${d.tipo || 'desconocido'}</span></td>
+        <td><span class="tipo-tag" style="${(()=>{const c={router:'#00c8d4',servidor:'#4ad8e6',computadora:'#d0d4e0',camara:'#22C55E',impresora:'#cc8800',dispositivo:'#707888'}[d.tipo];return c?'color:'+c+';border-color:'+c+'44':'color:var(--teal-lt)'})()}}">${d.tipo || 'desconocido'}</span></td>
         <td><span class="status-dot ${dotClass}"></span>${estadoTexto}</td>
         <td>${latStr}</td>
         <td>${ultima}</td>

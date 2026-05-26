@@ -9,19 +9,21 @@
 <link href="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.9/dist/dist/vis-network.min.css" rel="stylesheet">
 <style>
   :root {
-    --bg:      #0D1117;
-    --surface: #161B22;
-    --hover:   #1F2937;
-    --teal:    #0EA5A0;
-    --teal-lt: #D0F4F2;
-    --text:    #F0F6FC;
-    --muted:   #8B949E;
-    --up:      #16A34A;
-    --warn:    #D97706;
-    --down:    #DC2626;
-    --border:  #30363D;
-    --font:    'JetBrains Mono', monospace;
-    --radius:  6px;
+    --bg:        #0a0a0f;
+    --surface:   #0f0f18;
+    --hover:     #151528;
+    --teal:      #00c8d4;
+    --teal-lt:   #4ad8e6;
+    --green:     #00cc77;
+    --text:      #d0d4e0;
+    --muted:     #707888;
+    --up:        #22C55E;
+    --warn:      #e6a800;
+    --degradado: #d97917;
+    --down:      #e84848;
+    --border:    #18182a;
+    --font:      'JetBrains Mono', monospace;
+    --radius:    6px;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { height: 100%; overflow: hidden; }
@@ -35,14 +37,26 @@
     content: '';
     position: fixed;
     inset: 0;
-    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(14,165,160,0.015) 2px, rgba(14,165,160,0.015) 4px);
+    background:
+      repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,200,212,0.004) 2px, rgba(0,200,212,0.004) 4px);
     pointer-events: none;
-    z-index: 999;
+    z-index: 1;
+  }
+  #gridCanvas {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.3;
   }
   .header {
-    background: var(--surface);
+    background: rgba(15,15,24,0.92);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     border-bottom: 1px solid var(--border);
-    padding: 0 20px;
+    padding: 0 24px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -50,144 +64,274 @@
     position: relative;
     z-index: 100;
   }
-  .header-left { display: flex; align-items: center; gap: 16px; }
-  .logo { font-size: 18px; font-weight: 700; color: var(--teal); letter-spacing: -1px; }
-  .logo span { font-weight: 300; color: var(--teal-lt); }
+  .logo { font-size: 18px; font-weight: 600; color: var(--teal); letter-spacing: 3px; text-transform: uppercase; }
+  .logo span { font-weight: 300; color: var(--muted); letter-spacing: 1px; }
   .header-right { display: flex; align-items: center; gap: 12px; }
   .btn {
-    background: var(--surface); border: 1px solid var(--border); color: var(--muted);
+    background: transparent; border: 1px solid var(--border); color: var(--muted);
     padding: 5px 12px; border-radius: var(--radius); font-family: var(--font);
-    font-size: 11px; cursor: pointer; transition: all 0.15s; text-decoration: none;
+    font-size: 10px; cursor: pointer; transition: all 0.2s; letter-spacing: 0.02em;
+    text-decoration: none;
   }
-  .btn:hover { border-color: var(--teal); color: var(--teal-lt); }
-  .btn-primary { background: rgba(14,165,160,0.15); border-color: var(--teal); color: var(--teal-lt); }
+  .btn:hover { border-color: rgba(0,200,212,0.25); color: var(--teal); background: rgba(0,200,212,0.03); }
+  .btn-primary { background: rgba(0,200,212,0.06); border-color: rgba(0,200,212,0.15); color: var(--teal); }
+  .btn-primary:hover { background: rgba(0,200,212,0.12); border-color: rgba(0,200,212,0.25); }
   .badge {
-    background: rgba(14,165,160,0.1); border: 1px solid rgba(14,165,160,0.3);
-    color: var(--teal); font-size: 10px; padding: 2px 8px; border-radius: 20px;
+    background: rgba(0,200,212,0.06); border: 1px solid rgba(0,200,212,0.15);
+    color: var(--muted); font-size: 9px; padding: 2px 10px; border-radius: 12px;
+    letter-spacing: 0.05em;
   }
-  .layout { display: flex; height: calc(100vh - 52px); }
+  .layout { display: flex; height: calc(100vh - 52px); position: relative; z-index: 2; }
   #mapa-container { flex: 1; position: relative; }
   #mapa { width: 100%; height: 100%; }
+
+  /* ── Terminal windows ── */
+  .term-window {
+    border: 1px solid var(--border); border-radius: var(--radius);
+    background: rgba(10,10,18,0.6); overflow: hidden;
+  }
+  .term-bar {
+    padding: 6px 12px; border-bottom: 1px solid rgba(24,24,42,0.3);
+    background: rgba(0,0,0,0.25); user-select: none;
+    display: flex; align-items: center; gap: 8px;
+    font-size: 10px; color: var(--muted); font-family: var(--font);
+  }
+  .prompt-user { color: var(--green); font-weight: 500; }
+  .prompt-at { color: var(--muted); }
+  .prompt-host { color: var(--teal); font-weight: 500; }
+  .prompt-path { color: var(--teal-lt); }
+  .prompt-sym { color: var(--green); font-weight: 700; }
+
+  /* ── Top filter bar ── */
+  .filter-bar {
+    position: absolute; top: 12px; left: 12px; right: 12px;
+    z-index: 10; display: flex; gap: 8px; align-items: center;
+    flex-wrap: wrap;
+  }
+  .filter-group {
+    display: flex; gap: 4px; align-items: center;
+    background: rgba(10,10,18,0.85);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 4px 8px; font-size: 9px;
+  }
+  .filter-group label {
+    display: flex; align-items: center; gap: 3px;
+    cursor: pointer; color: var(--muted); font-size: 9px;
+    padding: 1px 4px; border-radius: 3px; transition: all 0.15s;
+  }
+  .filter-group label:hover { color: var(--text); background: var(--hover); }
+  .filter-group input[type="checkbox"] { accent-color: var(--teal); width: 10px; height: 10px; }
+  .filter-group input[type="text"] {
+    background: var(--bg); border: 1px solid var(--border);
+    color: var(--text); font-family: var(--font); font-size: 10px;
+    padding: 2px 6px; border-radius: 3px; width: 140px;
+    outline: none;
+  }
+  .filter-group input[type="text"]:focus { border-color: rgba(0,200,212,0.25); }
+  .filter-label { color: var(--muted); font-size: 8px; text-transform: uppercase; letter-spacing: 0.1em; margin-right: 2px; }
+
+  /* ── Bottom controls ── */
+  .map-controls {
+    position: absolute; bottom: 16px; left: 12px; z-index: 10;
+    display: flex; gap: 6px; align-items: center;
+  }
+
+  /* ── Legend ── */
+  .legend {
+    position: absolute; top: 80px; right: 12px; z-index: 10;
+    background: rgba(10,10,18,0.85);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 8px 10px; font-size: 9px;
+  }
+  .legend-title { color: var(--muted); font-size: 8px; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; color: var(--text); }
+  .legend-shape { display: inline-block; width: 10px; height: 10px; border-radius: 2px; text-align: center; line-height: 10px; font-size: 7px; }
+
+  /* ── Side panel ── */
   .panel-lateral {
-    width: 0;
-    overflow: hidden;
-    background: var(--surface);
+    width: 0; overflow: hidden;
+    background: rgba(10,10,18,0.92);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     border-left: 1px solid var(--border);
     transition: width 0.25s ease;
-    display: flex;
-    flex-direction: column;
+    display: flex; flex-direction: column;
   }
-  .panel-lateral.abierto { width: 320px; min-width: 320px; }
+  .panel-lateral.abierto { width: 340px; min-width: 340px; }
   .panel-header {
-    padding: 16px;
+    padding: 12px 14px;
     border-bottom: 1px solid var(--border);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+    display: flex; justify-content: space-between; align-items: center;
+    background: rgba(0,0,0,0.2);
   }
-  .panel-header h3 { font-size: 13px; color: var(--teal-lt); font-weight: 600; }
+  .panel-header h3 { font-size: 12px; color: var(--teal-lt); font-weight: 500; letter-spacing: 0.02em; }
   .panel-close {
-    background: none; border: none; color: var(--muted); font-size: 16px;
+    background: none; border: none; color: var(--muted); font-size: 14px;
     cursor: pointer; padding: 2px 6px; border-radius: 3px;
   }
   .panel-close:hover { background: var(--hover); color: var(--text); }
-  .panel-body { flex: 1; overflow-y: auto; padding: 16px; font-size: 12px; }
-  .panel-field { margin-bottom: 12px; }
-  .panel-label { font-size: 9px; color: var(--teal); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 2px; }
-  .panel-value { color: var(--text); font-size: 12px; word-break: break-all; }
-  .panel-estado { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 3px; font-size: 11px; }
-  .panel-estado.up { background: rgba(22,163,74,0.15); color: var(--up); border: 1px solid rgba(22,163,74,0.3); }
-  .panel-estado.degradado { background: rgba(249,115,22,0.15); color: #F97316; border: 1px solid rgba(249,115,22,0.3); }
-  .panel-estado.down { background: rgba(220,38,38,0.15); color: var(--down); border: 1px solid rgba(220,38,38,0.3); }
-  .panel-estado.warn { background: rgba(217,119,6,0.15); color: var(--warn); border: 1px solid rgba(217,119,6,0.3); }
-  .panel-estado.unknown { background: rgba(139,148,158,0.1); color: var(--muted); border: 1px solid var(--border); }
+  .panel-body { flex: 1; overflow-y: auto; padding: 14px; font-size: 11px; }
+  .panel-field { margin-bottom: 10px; }
+  .panel-label { font-size: 8px; color: var(--teal); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 2px; }
+  .panel-value { color: var(--text); font-size: 11px; word-break: break-all; }
+  .panel-estado { display: inline-flex; align-items: center; gap: 5px; padding: 2px 6px; border-radius: 3px; font-size: 10px; }
+  .panel-estado.up { background: rgba(34,197,94,0.12); color: var(--up); border: 1px solid rgba(34,197,94,0.2); }
+  .panel-estado.warn { background: rgba(230,168,0,0.12); color: var(--warn); border: 1px solid rgba(230,168,0,0.2); }
+  .panel-estado.degradado { background: rgba(217,121,23,0.12); color: var(--degradado); border: 1px solid rgba(217,121,23,0.2); }
+  .panel-estado.down { background: rgba(232,72,72,0.12); color: var(--down); border: 1px solid rgba(232,72,72,0.2); }
+  .panel-estado.desconocido { background: rgba(112,120,136,0.08); color: var(--muted); border: 1px solid var(--border); }
+  .type-tag {
+    background: rgba(0,200,212,0.04); border: 1px solid rgba(0,200,212,0.08);
+    border-radius: 3px; padding: 1px 6px; font-size: 9px; color: var(--teal-lt);
+    display: inline-block;
+  }
   .panel-barra-historial { display: flex; gap: 2px; flex-wrap: wrap; margin-top: 4px; }
-  .h-bar { width: 6px; height: 14px; border-radius: 1px; }
-  .controles-mapa {
-    position: absolute; bottom: 16px; left: 16px; z-index: 10;
-    display: flex; gap: 8px; align-items: center;
-  }
-  .controles-mapa .btn { background: var(--surface); }
-  .contador { color: var(--muted); font-size: 10px; }
-  .leyenda {
-    position: absolute; top: 16px; right: 16px; z-index: 10;
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 10px 14px; font-size: 10px;
-  }
-  .leyenda-item { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-  .leyenda-item:last-child { margin-bottom: 0; }
-  .leyenda-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .h-bar { width: 8px; height: 16px; border-radius: 1px; }
+  .panel-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+  .panel-actions .btn { font-size: 9px; padding: 3px 8px; }
+  .no-select { color: var(--muted); font-style: italic; padding: 20px; text-align: center; font-size: 11px; }
+  .count { color: var(--muted); font-size: 9px; }
 </style>
 </head>
 <body>
 
+<canvas id="gridCanvas"></canvas>
+
 <div class="header">
-  <div class="header-left">
-    <div class="logo">Vig<span>IA</span></div>
-    <span class="badge">Mapa topológico</span>
-    <span class="badge" id="clienteBadge">red_cliente</span>
-  </div>
+  <div class="logo">Vig<span>IA</span><span style="font-size:9px;color:var(--muted);margin-left:8px;letter-spacing:1px;font-weight:300;">// TOPOLOGY</span></div>
   <div class="header-right">
-    <span class="badge" id="pollBadge">⏹ detenido</span>
-    <a href="/" class="btn">⬅ Dashboard</a>
+    <span class="badge" id="clienteBadge">red_cliente</span>
+    <span class="badge" id="pollBadge">⏹ IDLE</span>
+    <span class="badge" style="border-color:rgba(0,204,119,0.1);color:rgba(112,120,136,0.5);font-size:8px;">alejo_fix</span>
+    <a href="/" class="btn">⬅ Dash</a>
   </div>
 </div>
 
 <div class="layout">
   <div id="mapa-container">
-    <div id="mapa"></div>
 
-    <div class="leyenda">
-      <div class="leyenda-item"><span class="leyenda-dot" style="background:var(--up)"></span> UP</div>
-      <div class="leyenda-item"><span class="leyenda-dot" style="background:var(--down)"></span> DOWN</div>
-      <div class="leyenda-item"><span class="leyenda-dot" style="background:var(--warn)"></span> Latencia alta</div>
-      <div class="leyenda-item"><span class="leyenda-dot" style="background:var(--border)"></span> Desconocido</div>
-      <hr style="border-color:var(--border);margin:6px 0;">
-      <div id="leyendaSegmentos" style="font-size:9px;color:var(--muted);"></div>
+    <!-- Filter bar -->
+    <div class="filter-bar">
+      <div class="filter-group">
+        <span class="filter-label">TIPO</span>
+        <label><input type="checkbox" class="filter-tipo" value="router" checked> ▣ Router</label>
+        <label><input type="checkbox" class="filter-tipo" value="servidor" checked> ⊞ Serv</label>
+        <label><input type="checkbox" class="filter-tipo" value="computadora" checked> ★ PC</label>
+        <label><input type="checkbox" class="filter-tipo" value="camara" checked> ◇ Cam</label>
+        <label><input type="checkbox" class="filter-tipo" value="impresora" checked> △ Impr</label>
+        <label><input type="checkbox" class="filter-tipo" value="dispositivo" checked> ● Disp</label>
+        <label><input type="checkbox" class="filter-tipo" value="desconocido" checked> ○ ?</label>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">ESTADO</span>
+        <label><input type="checkbox" class="filter-estado" value="up" checked style="accent-color:#22C55E"> Up</label>
+        <label><input type="checkbox" class="filter-estado" value="warn" checked style="accent-color:#e6a800"> Warn</label>
+        <label><input type="checkbox" class="filter-estado" value="degradado" checked style="accent-color:#d97917"> Deg</label>
+        <label><input type="checkbox" class="filter-estado" value="down" checked style="accent-color:#e84848"> Down</label>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">BUSCAR</span>
+        <input type="text" id="filterSearch" placeholder="IP / hostname / alias..." oninput="aplicarFiltros()">
+      </div>
     </div>
 
-    <div class="controles-mapa">
-      <button class="btn btn-primary" id="btnPoll" onclick="togglePoll()">▶ Monitorear</button>
-      <button class="btn" onclick="cargarTopologia()">⟳ Recargar</button>
-      <button class="btn" onclick="autoAcomodar()">⊞ Acomodar</button>
-      <span class="contador" id="contador">—</span>
+    <!-- Legend -->
+    <div class="legend" id="leyenda">
+      <div class="legend-title">▸ TIPOS</div>
+      <div class="legend-item"><span class="legend-shape" style="background:#00c8d4;">⬡</span> Router</div>
+      <div class="legend-item"><span class="legend-shape" style="background:#4ad8e6;">⊞</span> Servidor</div>
+      <div class="legend-item"><span class="legend-shape" style="background:#d0d4e0;">★</span> Computadora</div>
+      <div class="legend-item"><span class="legend-shape" style="background:#22C55E;">◇</span> Cámara</div>
+      <div class="legend-item"><span class="legend-shape" style="background:#cc8800;">△</span> Impresora</div>
+      <div class="legend-item"><span class="legend-shape" style="background:#707888;">●</span> Dispositivo</div>
+      <div class="legend-item"><span class="legend-shape" style="background:#404050;">○</span> Desconocido</div>
+      <div style="margin-top:6px;padding-top:4px;border-top:1px solid var(--border);">
+        <div class="legend-title">▸ ESTADOS</div>
+        <div class="legend-item"><span style="width:10px;height:10px;border-radius:50%;display:inline-block;background:#22C55E;"></span> UP</div>
+        <div class="legend-item"><span style="width:10px;height:10px;border-radius:50%;display:inline-block;background:#e6a800;"></span> Latencia alta</div>
+        <div class="legend-item"><span style="width:10px;height:10px;border-radius:50%;display:inline-block;background:#d97917;"></span> Degradado</div>
+        <div class="legend-item"><span style="width:10px;height:10px;border-radius:50%;display:inline-block;background:#e84848;"></span> DOWN</div>
+      </div>
+    </div>
+
+    <div id="mapa"></div>
+
+    <!-- Bottom controls -->
+    <div class="map-controls">
+      <div class="term-window" style="display:flex;align-items:center;gap:4px;padding:2px 6px;">
+        <button class="btn btn-primary" id="btnPoll" onclick="togglePoll()" style="font-size:9px;padding:2px 8px;">▶ Monitor</button>
+        <button class="btn" onclick="cargarTopologia()" style="font-size:9px;padding:2px 6px;">↻</button>
+        <button class="btn" onclick="autoAcomodar()" style="font-size:9px;padding:2px 6px;">⊞ Lay</button>
+        <button class="btn" onclick="cambiarLayout()" style="font-size:9px;padding:2px 6px;">⟁ Switch</button>
+        <span class="count" id="contador" style="margin-left:4px;">—</span>
+      </div>
     </div>
   </div>
 
+  <!-- Side panel -->
   <div class="panel-lateral" id="panelLateral">
     <div class="panel-header">
-      <h3 id="panelTitulo">Dispositivo</h3>
+      <h3 id="panelTitulo"><span id="panelIcono"></span> <span id="panelNombre">Dispositivo</span></h3>
       <button class="panel-close" onclick="cerrarPanel()">✕</button>
     </div>
     <div class="panel-body" id="panelBody">
-      <div class="panel-field">
-        <div class="panel-label">IP</div>
-        <div class="panel-value" id="pIP">—</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div class="panel-field">
+          <div class="panel-label">IP</div>
+          <div class="panel-value" id="pIP" style="color:var(--teal);font-weight:500;">—</div>
+        </div>
+        <div class="panel-field">
+          <div class="panel-label">Estado</div>
+          <div class="panel-value" id="pEstado">—</div>
+        </div>
+        <div class="panel-field">
+          <div class="panel-label">Hostname</div>
+          <div class="panel-value" id="pHostname">—</div>
+        </div>
+        <div class="panel-field">
+          <div class="panel-label">Alias</div>
+          <div class="panel-value" id="pAlias">—</div>
+        </div>
+        <div class="panel-field">
+          <div class="panel-label">MAC</div>
+          <div class="panel-value" id="pMAC" style="font-family:monospace;font-size:10px;">—</div>
+        </div>
+        <div class="panel-field">
+          <div class="panel-label">Fabricante</div>
+          <div class="panel-value" id="pFabricante">—</div>
+        </div>
+        <div class="panel-field">
+          <div class="panel-label">Tipo</div>
+          <div class="panel-value" id="pTipo">—</div>
+        </div>
+        <div class="panel-field">
+          <div class="panel-label">Asignación IP</div>
+          <div class="panel-value" id="pAsignacion">—</div>
+        </div>
+        <div class="panel-field">
+          <div class="panel-label">Segmento</div>
+          <div class="panel-value" id="pSegmento">—</div>
+        </div>
+        <div class="panel-field">
+          <div class="panel-label">Latencia</div>
+          <div class="panel-value" id="pLatencia">—</div>
+        </div>
+        <div class="panel-field">
+          <div class="panel-label">Descripción</div>
+          <div class="panel-value" id="pDescripcion">—</div>
+        </div>
+        <div class="panel-field">
+          <div class="panel-label">Última vez</div>
+          <div class="panel-value" id="pUltimaVez">—</div>
+        </div>
       </div>
-      <div class="panel-field">
-        <div class="panel-label">Hostname</div>
-        <div class="panel-value" id="pHostname">—</div>
-      </div>
-      <div class="panel-field">
-        <div class="panel-label">Tipo</div>
-        <div class="panel-value" id="pTipo">—</div>
-      </div>
-      <div class="panel-field">
-        <div class="panel-label">Segmento</div>
-        <div class="panel-value" id="pSegmento">—</div>
-      </div>
-      <div class="panel-field">
-        <div class="panel-label">Estado</div>
-        <div class="panel-value" id="pEstado">—</div>
-      </div>
-      <div class="panel-field">
-        <div class="panel-label">Latencia</div>
-        <div class="panel-value" id="pLatencia">—</div>
-      </div>
-      <div class="panel-field">
-        <div class="panel-label">Historial (ultimos 24)</div>
+
+      <div style="margin-top:14px;">
+        <div class="panel-label" style="margin-bottom:4px;">Historial (últimos 24)</div>
         <div class="panel-barra-historial" id="pHistorial"></div>
       </div>
+
+      <div class="panel-actions" id="panelActions"></div>
     </div>
   </div>
 </div>
@@ -198,79 +342,193 @@ if (window.location.port === '' || window.location.port === '80' || window.locat
   API_BASE = 'http://localhost:8080';
 }
 
-async function apiFetch(url, opts = {}) {
-  const resp = await fetch(API_BASE + url, {
-    headers: { 'Content-Type': 'application/json', ...opts.headers },
-    ...opts,
-  });
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-  return resp.json();
-}
+var network = null, nodes = null, edges = null;
+var nodosData = [], enlacesData = [];
+var pollIntervalId = null, pollActivo = false, pollContador = 0;
+var layoutIndex = 0;
+var currentFilter = { tipos: {}, estados: {}, search: '' };
 
-let network = null;
-let nodes = null;
-let edges = null;
-let nodosData = [];
-let pollIntervalId = null;
-let pollActivo = false;
-let pollContador = 0;
+document.querySelectorAll('.filter-bar input[type="checkbox"]').forEach(function(cb) {
+  cb.addEventListener('change', aplicarFiltros);
+});
 
-function colorEstado(estado, latencia) {
-  if (estado === 'up') {
-    if (latencia !== null && latencia > 100) return { background: '#D97706', border: '#B45309' };
-    return { background: '#16A34A', border: '#15803D' };
+// ── Grid canvas ──
+(function() {
+  var canvas = document.getElementById('gridCanvas');
+  var ctx = canvas.getContext('2d');
+  var w, h;
+
+  function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
   }
-  if (estado === 'degradado') return { background: '#F97316', border: '#EA580C' };
-  if (estado === 'down' || estado === 'warn') return { background: '#DC2626', border: '#B91C1C' };
-  return { background: '#30363D', border: '#1F2937' };
+  window.addEventListener('resize', resize);
+  resize();
+
+  function drawGrid() {
+    ctx.clearRect(0, 0, w, h);
+    ctx.strokeStyle = 'rgba(24,24,42,0.3)';
+    ctx.lineWidth = 0.5;
+
+    var spacing = 40;
+    for (var x = 0; x <= w; x += spacing) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, h);
+      ctx.stroke();
+    }
+    for (var y = 0; y <= h; y += spacing) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(w, y);
+      ctx.stroke();
+    }
+
+    // Center crosshair
+    ctx.strokeStyle = 'rgba(0,200,212,0.12)';
+    ctx.lineWidth = 1;
+    var cx = w / 2, cy = h / 2;
+    ctx.beginPath();
+    ctx.moveTo(cx - 20, cy); ctx.lineTo(cx + 20, cy);
+    ctx.moveTo(cx, cy - 20); ctx.lineTo(cx, cy + 20);
+    ctx.stroke();
+
+    requestAnimationFrame(drawGrid);
+  }
+  drawGrid();
+})();
+
+// ── Shape / color mapping ──
+var TIPO_CONFIG = {
+  router:      { shape: 'hexagon', color: '#00c8d4', label: 'Router' },
+  servidor:    { shape: 'square',  color: '#4ad8e6', label: 'Servidor' },
+  computadora: { shape: 'star',    color: '#d0d4e0', label: 'PC' },
+  camara:      { shape: 'diamond', color: '#22C55E', label: 'Cámara' },
+  impresora:   { shape: 'triangle',color: '#cc8800', label: 'Impresora' },
+  dispositivo: { shape: 'dot',     color: '#707888', label: 'Dispositivo' },
+  desconocido: { shape: 'dot',     color: '#404050', label: '?' },
+};
+
+var ESTADO_BORDE = {
+  up:         '#22C55E',
+  warn:       '#e6a800',
+  degradado:  '#d97917',
+  down:       '#e84848',
+};
+
+var ESTADO_LABEL = {
+  up: 'UP',
+  warn: 'Latencia alta',
+  degradado: 'Degradado',
+  down: 'DOWN',
+};
+
+function apiFetch(url, opts) {
+  opts = opts || {};
+  return fetch(API_BASE + url, {
+    headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
+    ...opts,
+  }).then(function(r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  });
 }
 
+function shapeFromTipo(tipo) {
+  var cfg = TIPO_CONFIG[tipo];
+  return cfg ? cfg.shape : 'dot';
+}
+
+function colorFromTipo(tipo) {
+  var cfg = TIPO_CONFIG[tipo];
+  return cfg ? cfg.color : '#404050';
+}
+
+function borderFromEstado(estado) {
+  return ESTADO_BORDE[estado] || '#404050';
+}
+
+function sizeFromTipo(tipo) {
+  switch (tipo) {
+    case 'router': return 40;
+    case 'servidor': return 32;
+    case 'computadora': return 26;
+    case 'camara': return 28;
+    case 'impresora': return 28;
+    default: return 22;
+  }
+}
+
+// ── Load topology ──
 async function cargarTopologia() {
   try {
-    const data = await apiFetch('/api/topologia');
+    var data = await apiFetch('/api/topologia');
     nodosData = data.nodos || [];
-    actualizarLeyendaSegmentos();
+    enlacesData = data.enlaces || [];
 
-    const visNodes = new vis.DataSet(nodosData.map(n => {
-      const c = colorEstado(n.estado, n.latencia);
-      const segLabel = n.segmento ? n.segmento : '';
-      return {
+    var visNodes = new vis.DataSet();
+    nodosData.forEach(function(n) {
+      var tipo = n.tipo || 'desconocido';
+      var estado = n.estado || 'desconocido';
+      var cfg = TIPO_CONFIG[tipo] || TIPO_CONFIG.desconocido;
+      var borderColor = borderFromEstado(estado);
+      var baseColor = colorFromTipo(tipo);
+      var labelHTML = n.hostname || n.ip;
+      if (n.alias) labelHTML = n.alias + '\n' + (n.hostname || n.ip);
+
+      visNodes.add({
         id: n.id,
-        label: n.hostname || n.ip,
-        title: `${n.ip}\n${n.tipo || ''}\n${segLabel}\n${n.estado}`,
-        color: c,
+        label: labelHTML,
+        shape: shapeFromTipo(tipo),
+        color: {
+          background: baseColor,
+          border: borderColor,
+          highlight: { background: baseColor, border: borderColor },
+        },
+        borderWidth: 3,
+        borderWidthSelected: 4,
+        size: sizeFromTipo(tipo),
+        font: {
+          color: '#d0d4e0', size: 9, face: 'JetBrains Mono',
+          strokeWidth: 2, strokeColor: '#0a0a0f',
+          multi: 'md',
+        },
         x: n.x || undefined,
         y: n.y || undefined,
-        font: { color: '#F0F6FC', size: 11, face: 'JetBrains Mono' },
-        size: 20,
-        borderWidth: 2,
-        shape: 'dot',
-      };
-    }));
+      });
+    });
 
-    const visEdges = new vis.DataSet(data.enlaces || []);
+    var visEdges = new vis.DataSet();
+    enlacesData.forEach(function(e) {
+      visEdges.add({
+        from: e.from,
+        to: e.to,
+        color: { color: '#18182a', hover: '#00c8d4' },
+        width: 1,
+        smooth: { type: 'continuous' },
+      });
+    });
 
-    const container = document.getElementById('mapa');
-    const options = {
+    var container = document.getElementById('mapa');
+    var options = {
       physics: { enabled: false },
       interaction: {
         dragNodes: true,
         dragView: true,
         zoomView: true,
         hover: true,
+        tooltipDelay: 200,
       },
       manipulation: { enabled: false },
       nodes: {
-        font: { color: '#F0F6FC', size: 11, face: 'JetBrains Mono' },
-        borderWidth: 2,
-        size: 20,
+        font: { face: 'JetBrains Mono' },
       },
       edges: {
-        color: { color: '#30363D', hover: '#0EA5A0' },
+        color: { color: '#18182a', hover: '#00c8d4' },
         width: 1,
         smooth: { type: 'continuous' },
       },
-      background: '#0D1117',
+      background: 'transparent',
     };
 
     if (network) {
@@ -280,77 +538,237 @@ async function cargarTopologia() {
 
       network.on('click', function(params) {
         if (params.nodes.length > 0) {
-          const nodeId = params.nodes[0];
-          mostrarPanel(nodeId);
+          mostrarPanel(params.nodes[0]);
+        } else {
+          cerrarPanel();
         }
       });
 
       network.on('dragEnd', function(params) {
-        if (params.nodes.length > 0) {
-          guardarPosiciones();
-        }
+        if (params.nodes.length > 0) guardarPosiciones();
       });
 
-      network.on('hoverNode', function(params) {
+      network.on('hoverNode', function() {
         document.getElementById('mapa').style.cursor = 'pointer';
       });
       network.on('blurNode', function() {
         document.getElementById('mapa').style.cursor = 'default';
       });
     }
+
+    aplicarFiltros();
+    actualizarContador();
   } catch (e) {
     console.error('Error cargando topologia:', e);
   }
 }
 
+// ── Filters ──
+function aplicarFiltros() {
+  if (!network) return;
+
+  currentFilter.search = (document.getElementById('filterSearch').value || '').toLowerCase();
+
+  var checkboxesTipo = document.querySelectorAll('.filter-tipo');
+  checkboxesTipo.forEach(function(cb) {
+    currentFilter.tipos[cb.value] = cb.checked;
+  });
+
+  var checkboxesEstado = document.querySelectorAll('.filter-estado');
+  checkboxesEstado.forEach(function(cb) {
+    currentFilter.estados[cb.value] = cb.checked;
+  });
+
+  var visibleIds = [];
+  nodosData.forEach(function(n) {
+    var tipo = n.tipo || 'desconocido';
+    var estado = n.estado || 'desconocido';
+    if (!currentFilter.tipos[tipo]) return;
+    if (!currentFilter.estados[estado]) return;
+    if (currentFilter.search) {
+      var haystack = (n.ip + ' ' + (n.hostname || '') + ' ' + (n.alias || '')).toLowerCase();
+      if (haystack.indexOf(currentFilter.search) === -1) return;
+    }
+    visibleIds.push(n.id);
+  });
+
+  var filteredNodes = new vis.DataSet();
+  nodosData.forEach(function(n) {
+    if (visibleIds.indexOf(n.id) === -1) return;
+    var tipo = n.tipo || 'desconocido';
+    var estado = n.estado || 'desconocido';
+    var cfg = TIPO_CONFIG[tipo] || TIPO_CONFIG.desconocido;
+    var borderColor = borderFromEstado(estado);
+    var baseColor = colorFromTipo(tipo);
+    var labelHTML = n.hostname || n.ip;
+    if (n.alias) labelHTML = n.alias + '\n' + (n.hostname || n.ip);
+    filteredNodes.add({
+      id: n.id,
+      label: labelHTML,
+      shape: shapeFromTipo(tipo),
+      color: {
+        background: baseColor,
+        border: borderColor,
+        highlight: { background: baseColor, border: borderColor },
+      },
+      borderWidth: 3,
+      borderWidthSelected: 4,
+      size: sizeFromTipo(tipo),
+      font: {
+        color: '#d0d4e0', size: 9, face: 'JetBrains Mono',
+        strokeWidth: 2, strokeColor: '#0a0a0f',
+        multi: 'md',
+      },
+      x: n.x || undefined,
+      y: n.y || undefined,
+    });
+  });
+
+  var filteredEdges = new vis.DataSet();
+  enlacesData.forEach(function(e) {
+    if (visibleIds.indexOf(e.from) === -1 || visibleIds.indexOf(e.to) === -1) return;
+    filteredEdges.add({
+      from: e.from,
+      to: e.to,
+      color: { color: '#18182a', hover: '#00c8d4' },
+      width: 1,
+      smooth: { type: 'continuous' },
+    });
+  });
+
+  network.setData({ nodes: filteredNodes, edges: filteredEdges });
+  actualizarContador(visibleIds.length);
+}
+
+function actualizarContador(visible) {
+  var el = document.getElementById('contador');
+  var total = nodosData.length;
+  if (visible !== undefined) {
+    el.textContent = visible + '/' + total;
+  } else {
+    el.textContent = total + ' hosts';
+  }
+}
+
+// ── Side panel ──
 async function mostrarPanel(nodeId) {
-  const nodo = nodosData.find(n => n.id === nodeId);
+  var nodo = nodosData.find(function(n) { return n.id === nodeId; });
   if (!nodo) return;
 
   document.getElementById('panelLateral').classList.add('abierto');
-  document.getElementById('panelTitulo').textContent = nodo.hostname || nodo.ip;
+  var tipo = nodo.tipo || 'desconocido';
+  var cfg = TIPO_CONFIG[tipo] || TIPO_CONFIG.desconocido;
+  var estado = nodo.estado || 'desconocido';
+  var borderColor = borderFromEstado(estado);
+
+  document.getElementById('panelNombre').textContent = nodo.alias || nodo.hostname || nodo.ip;
+  document.getElementById('panelIcono').innerHTML = '<span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:' + cfg.color + ';border:2px solid ' + borderColor + ';margin-right:4px;vertical-align:middle;"></span>';
+
   document.getElementById('pIP').textContent = nodo.ip;
   document.getElementById('pHostname').textContent = nodo.hostname || '—';
-  document.getElementById('pTipo').textContent = nodo.tipo || '—';
+  document.getElementById('pAlias').textContent = nodo.alias || '—';
+  document.getElementById('pMAC').textContent = nodo.mac || '—';
+  document.getElementById('pFabricante').textContent = nodo.fabricante || '—';
+  document.getElementById('pTipo').innerHTML = '<span class="type-tag">' + cfg.label + '</span>';
+  document.getElementById('pDescripcion').textContent = nodo.descripcion || '—';
+
+  var asig = nodo.tipo_asignacion_ip || 'desconocido';
+  var asigColores = { dhcp: '#3b82f6', reservada: '#22c55e', estatica: '#f97316', desconocido: '#9ca3af' };
+  document.getElementById('pAsignacion').innerHTML = '<span style="color:' + (asigColores[asig] || '#9ca3af') + ';">' + asig.toUpperCase() + '</span>';
+
   document.getElementById('pSegmento').textContent = nodo.segmento || '—';
+  document.getElementById('pUltimaVez').textContent = nodo.ultima_vez ? new Date(nodo.ultima_vez).toLocaleString() : '—';
 
-  let estadoClase = 'unknown';
-  let estadoTexto = nodo.estado || 'desconocido';
-  if (nodo.estado === 'up') {
-    if (nodo.latencia !== null && nodo.latencia > 100) {
-      estadoClase = 'warn';
-      estadoTexto = 'latencia alta';
-    } else {
-      estadoClase = 'up';
-    }
-  } else if (nodo.estado === 'degradado') {
-    estadoClase = 'degradado';
-    estadoTexto = 'degradado';
-  } else if (nodo.estado === 'down' || nodo.estado === 'warn') {
-    if (nodo.estado === 'warn') estadoTexto = 'latencia alta';
-    estadoClase = 'down';
-  }
-  document.getElementById('pEstado').innerHTML = `<span class="panel-estado ${estadoClase}">${estadoTexto}</span>`;
-  document.getElementById('pLatencia').textContent = nodo.latencia !== null ? `${nodo.latencia.toFixed(0)}ms` : '—';
+  var estadoClase = estado;
+  var estadoTexto = ESTADO_LABEL[estado] || estado;
+  document.getElementById('pEstado').innerHTML = '<span class="panel-estado ' + estadoClase + '">● ' + estadoTexto + '</span>';
+  document.getElementById('pLatencia').textContent = nodo.latencia !== null ? nodo.latencia.toFixed(1) + 'ms' : '—';
 
-  const historialEl = document.getElementById('pHistorial');
+  var historialEl = document.getElementById('pHistorial');
   historialEl.innerHTML = '';
   try {
-    const pings = await apiFetch(`/api/dispositivos/${nodeId}/pings?limite=24`);
-    for (const p of pings.reverse()) {
-      const bar = document.createElement('div');
+    var pings = await apiFetch('/api/dispositivos/' + nodeId + '/pings?limite=24');
+    pings.reverse().forEach(function(p) {
+      var bar = document.createElement('div');
       bar.className = 'h-bar';
       if (p.estado === 'up') {
-        bar.style.background = p.latencia_ms && p.latencia_ms > 100 ? '#D97706' : '#16A34A';
+        bar.style.background = p.latencia_ms && p.latencia_ms > 100 ? '#e6a800' : '#22C55E';
       } else if (p.estado === 'degradado') {
-        bar.style.background = '#F97316';
+        bar.style.background = '#d97917';
       } else {
-        bar.style.background = '#DC2626';
+        bar.style.background = '#e84848';
       }
-      bar.title = `${p.estado} ${p.latencia_ms ? p.latencia_ms.toFixed(0)+'ms' : ''} ${new Date(p.timestamp).toLocaleTimeString()}`;
+      bar.title = (p.estado || '') + ' ' + (p.latencia_ms ? p.latencia_ms.toFixed(0) + 'ms' : '') + ' ' + new Date(p.timestamp).toLocaleTimeString();
       historialEl.appendChild(bar);
-    }
+    });
   } catch (_) {}
+
+  var actionsEl = document.getElementById('panelActions');
+  actionsEl.innerHTML = '';
+  actionsEl.innerHTML += '<button class="btn" onclick="window.open(\'http://' + nodo.ip + '\',\'_blank\')">🌐 Web</button>';
+  actionsEl.innerHTML += '<button class="btn" onclick="copiarIP(\'' + nodo.ip + '\')">📋 IP</button>';
+  actionsEl.innerHTML += '<button class="btn" onclick="mostrarPing(' + nodeId + ')">🔍 Ping</button>';
+}
+
+function copiarIP(ip) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(ip).catch(function() {
+      fallbackCopiar(ip);
+    });
+  } else {
+    fallbackCopiar(ip);
+  }
+}
+
+function fallbackCopiar(texto) {
+  var ta = document.createElement('textarea');
+  ta.value = texto;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    document.execCommand('copy');
+  } catch (_) {}
+  document.body.removeChild(ta);
+}
+
+function mostrarPing(nodeId) {
+  var nodo = nodosData.find(function(n) { return n.id === nodeId; });
+  if (!nodo) return;
+
+  var statusEl = document.getElementById('pPingStatus');
+  if (!statusEl) {
+    statusEl = document.createElement('div');
+    statusEl.id = 'pPingStatus';
+    statusEl.style.cssText = 'margin-top:12px;padding:8px 10px;border:1px solid var(--border);border-radius:4px;font-size:10px;background:rgba(0,0,0,0.2);';
+    document.getElementById('panelBody').appendChild(statusEl);
+  }
+  statusEl.innerHTML = '⏳ Pinging <strong>' + nodo.ip + '</strong>...';
+
+  var cliente = document.getElementById('clienteBadge').dataset.cliente || 'red_cliente';
+  apiFetch('/api/poll?nombre_cliente=' + encodeURIComponent(cliente)).then(function() {
+    return apiFetch('/api/dispositivos/con-estado');
+  }).then(function(devices) {
+    var d = devices.find(function(x) { return x.id === nodeId; });
+    if (!d) { statusEl.innerHTML = '❌ Dispositivo no encontrado'; return; }
+    if (d.estado === 'up') {
+      if (d.latencia_ms && d.latencia_ms > 100) {
+        statusEl.innerHTML = '⚠️ Latencia alta: ' + d.latencia_ms.toFixed(0) + 'ms';
+      } else {
+        statusEl.innerHTML = '✅ OK — ' + (d.latencia_ms ? d.latencia_ms.toFixed(0) + 'ms' : '<1ms');
+      }
+    } else if (d.estado === 'degradado') {
+      statusEl.innerHTML = '⚠️ Degradado';
+    } else if (d.estado === 'warn') {
+      statusEl.innerHTML = '⚠️ Latencia alta: ' + (d.latencia_ms ? d.latencia_ms.toFixed(0) + 'ms' : '?');
+    } else {
+      statusEl.innerHTML = '🔴 SIN RESPUESTA — equipo caído';
+    }
+    cargarTopologia();
+  }).catch(function() {
+    statusEl.innerHTML = '❌ Error al consultar estado';
+  });
 }
 
 function cerrarPanel() {
@@ -359,12 +777,10 @@ function cerrarPanel() {
 
 async function guardarPosiciones() {
   if (!network) return;
-  const positions = network.getPositions();
-  const posiciones = Object.entries(positions).map(([id, pos]) => ({
-    dispositivo_id: parseInt(id),
-    x: pos.x,
-    y: pos.y,
-  }));
+  var positions = network.getPositions();
+  var posiciones = Object.entries(positions).map(function(e) {
+    return { dispositivo_id: parseInt(e[0]), x: e[1].x, y: e[1].y };
+  });
   try {
     await apiFetch('/api/topologia/posiciones', {
       method: 'POST',
@@ -384,39 +800,46 @@ function autoAcomodar() {
   });
 }
 
+function cambiarLayout() {
+  if (!network) return;
+  var layouts = [
+    { solver: 'forceAtlas2Based', repulsion: 400 },
+    { solver: 'repulsion', repulsion: 600 },
+    { solver: 'barnesHut', repulsion: 500 },
+    { solver: 'hierarchicalRepulsion', repulsion: 400 },
+  ];
+  layoutIndex = (layoutIndex + 1) % layouts.length;
+  var l = layouts[layoutIndex];
+  network.setOptions({ physics: { enabled: true, solver: l.solver, repulsion: { nodeDistance: l.repulsion }, stabilization: { iterations: 150 } } });
+  network.once('stabilizationIterationsDone', function() {
+    network.setOptions({ physics: { enabled: false } });
+    guardarPosiciones();
+  });
+}
+
 function togglePoll() {
-  const btn = document.getElementById('btnPoll');
+  var btn = document.getElementById('btnPoll');
   if (pollActivo) {
     clearInterval(pollIntervalId);
     pollActivo = false;
-    btn.textContent = '▶ Monitorear';
-    document.getElementById('pollBadge').textContent = '⏹ detenido';
-    document.getElementById('contador').textContent = '—';
+    btn.textContent = '▶ Monitor';
+    document.getElementById('pollBadge').textContent = '⏹ IDLE';
+    document.getElementById('contador').textContent = nodosData.length + ' hosts';
   } else {
     pollActivo = true;
-    btn.textContent = '⏸ Detener';
+    btn.textContent = '⏸ Stop';
     document.getElementById('pollBadge').textContent = '▶ activo';
     pollContador = 0;
-    pollIntervalId = setInterval(() => {
+    pollIntervalId = setInterval(function() {
       cargarTopologia();
       pollContador++;
-      document.getElementById('contador').textContent = `⏱ ${pollContador * 10}s`;
+      document.getElementById('contador').textContent = '⏱ ' + (pollContador * 10) + 's';
     }, 10000);
     document.getElementById('contador').textContent = '⏱ 0s';
   }
 }
 
-function actualizarLeyendaSegmentos() {
-  const segs = [...new Set(nodosData.filter(n => n.segmento).map(n => n.segmento))];
-  const el = document.getElementById('leyendaSegmentos');
-  if (segs.length === 0) { el.innerHTML = ''; return; }
-  const colores = ['#0EA5A0','#8B5CF6','#F59E0B','#EF4444','#3B82F6','#EC4899'];
-  el.innerHTML = '<div style="margin-bottom:4px;color:var(--muted);font-size:9px;">SEGMENTOS</div>'
-    + segs.map((s, i) =>
-      `<div class="leyenda-item"><span class="leyenda-dot" style="background:${colores[i % colores.length]}"></span> ${s}</div>`
-    ).join('');
-}
-
+// ── Init ──
 cargarTopologia();
 </script>
 </body>

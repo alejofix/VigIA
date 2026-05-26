@@ -593,7 +593,17 @@ async def obtener_topologia():
             for p in session.query(PosicionTopologia).all()
         }
 
-        import math, random
+        cred_sub = (
+            session.query(
+                Credencial.dispositivo_id,
+                Credencial.alias,
+            )
+            .distinct(Credencial.dispositivo_id)
+            .subquery()
+        )
+        cred_map = {r.dispositivo_id: r.alias for r in session.query(cred_sub).all()}
+
+        import math
         nodos = []
         for i, d in enumerate(dispositivos):
             ultimo_ping = (
@@ -625,10 +635,17 @@ async def obtener_topologia():
                 "id": d.id,
                 "ip": d.ip,
                 "hostname": d.hostname,
-                "tipo": d.tipo,
+                "alias": cred_map.get(d.id),
+                "mac": d.mac,
+                "fabricante": d.fabricante,
+                "tipo": d.tipo or "desconocido",
                 "segmento": d.segmento,
+                "descripcion": d.descripcion,
+                "serial": d.serial,
+                "tipo_asignacion_ip": d.tipo_asignacion_ip or "desconocido",
                 "estado": estado,
                 "latencia": latencia,
+                "ultima_vez": d.ultima_vez.isoformat() if d.ultima_vez else None,
                 "x": x,
                 "y": y,
             })
@@ -639,10 +656,31 @@ async def obtener_topologia():
         for n in nodos:
             seg = n.get("segmento")
             if seg:
-                segmentos.setdefault(seg, []).append(n["id"])
-        for seg, ids in segmentos.items():
-            for i in range(len(ids) - 1):
-                enlaces.append({"from": ids[i], "to": ids[i + 1]})
+                segmentos.setdefault(seg, []).append(n)
+
+        for seg, devices in segmentos.items():
+            gateway = None
+            for d in devices:
+                if d["tipo"] == "router":
+                    gateway = d
+                    break
+            if not gateway:
+                for d in devices:
+                    if d["hostname"] and "_gateway" in d["hostname"].lower():
+                        gateway = d
+                        break
+            if not gateway and len(devices) > 1:
+                sorted_devs = sorted(devices, key=lambda x: (x["latencia"] if x["latencia"] is not None else 9999))
+                gateway = sorted_devs[0]
+
+            if gateway:
+                for d in devices:
+                    if d["id"] != gateway["id"]:
+                        enlaces.append({"from": gateway["id"], "to": d["id"]})
+            elif len(devices) > 1:
+                for i in range(len(devices) - 1):
+                    enlaces.append({"from": devices[i]["id"], "to": devices[i + 1]["id"]})
+
         return {"nodos": nodos, "enlaces": enlaces}
     finally:
         session.close()
