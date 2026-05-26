@@ -7,25 +7,26 @@
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg:      #0D1117;
-    --surface: #161B22;
-    --hover:   #1F2937;
-    --teal:    #0EA5A0;
-    --teal-lt: #5EEAD4;
-    --teal-glow: rgba(14,165,160,0.15);
-    --text:    #F0F6FC;
-    --muted:   #8B949E;
-    --up:      #22C55E;
-    --up-bg:   rgba(34,197,94,0.08);
-    --warn:    #F59E0B;
-    --warn-bg: rgba(245,158,11,0.08);
-    --degradado:    #F97316;
-    --degradado-bg: rgba(249,115,22,0.08);
-    --down:    #EF4444;
-    --down-bg: rgba(239,68,68,0.08);
-    --border:  #30363D;
-    --font:    'JetBrains Mono', monospace;
-    --radius:  8px;
+    --bg:        #0a0a0f;
+    --surface:   #0f0f18;
+    --hover:     #151528;
+    --teal:      #00c8d4;
+    --teal-lt:   #4ad8e6;
+    --teal-dim:  rgba(0,200,212,0.06);
+    --green:     #00cc77;
+    --text:      #d0d4e0;
+    --muted:     #707888;
+    --up:        #22C55E;
+    --up-bg:     rgba(34,197,94,0.06);
+    --warn:      #e6a800;
+    --warn-bg:   rgba(230,168,0,0.06);
+    --degradado: #d97917;
+    --degradado-bg: rgba(217,121,23,0.06);
+    --down:      #e84848;
+    --down-bg:   rgba(232,72,72,0.06);
+    --border:    #18182a;
+    --font:      'JetBrains Mono', monospace;
+    --radius:    6px;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -35,172 +36,280 @@
     font-size: 13px;
     line-height: 1.6;
     min-height: 100vh;
+    position: relative;
+  }
+  #bgCanvas {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 1;
   }
   body::before {
     content: '';
     position: fixed;
     inset: 0;
-    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(14,165,160,0.015) 2px, rgba(14,165,160,0.015) 4px);
+    background:
+      repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,200,212,0.004) 2px, rgba(0,200,212,0.004) 4px);
     pointer-events: none;
-    z-index: 999;
+    z-index: 1;
+  }
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse at 50% 0%, rgba(0,200,212,0.01) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 1;
   }
   .header {
-    background: var(--surface);
+    background: rgba(15,15,24,0.92);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     border-bottom: 1px solid var(--border);
     padding: 0 24px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    height: 56px;
+    height: 52px;
     position: sticky;
     top: 0;
     z-index: 100;
   }
-  .logo { font-size: 20px; font-weight: 700; color: var(--teal); letter-spacing: -1px; }
-  .logo span { font-weight: 300; color: var(--teal-lt); }
-  .header-right { display: flex; align-items: center; gap: 16px; }
-  .badge { background: rgba(14,165,160,0.1); border: 1px solid rgba(14,165,160,0.3); color: var(--teal); font-size: 10px; padding: 3px 8px; border-radius: 20px; }
-  .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
-  .stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 24px; }
-  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; transition: border-color 0.2s, box-shadow 0.2s; }
-  .stat-card:hover { border-color: rgba(14,165,160,0.3); box-shadow: 0 0 20px rgba(14,165,160,0.05); }
-  .stat-card.total { background: linear-gradient(135deg, var(--surface), #1a2332); border-color: var(--teal); }
-  .stat-card.total .stat-num { color: var(--teal-lt); font-size: 26px; }
-  .stat-card.alertas { background: linear-gradient(135deg, var(--surface), #2a1a1a); border-color: var(--down); }
-  .stat-card.alertas .stat-num { color: #f87171; font-size: 26px; }
-  .stat-num { font-size: 22px; font-weight: 700; color: var(--teal-lt); }
-  .stat-label { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px; }
-  .stat-card.up { border-left: 3px solid var(--up); }
+  .logo {
+    font-size: 18px; font-weight: 600; color: var(--teal); letter-spacing: 3px;
+    text-transform: uppercase; position: relative;
+  }
+  .logo::after {
+    content: '█';
+    font-size: 14px; color: var(--teal); margin-left: 2px;
+    animation: blink 1s step-end infinite;
+  }
+  .logo span { font-weight: 300; color: var(--muted); letter-spacing: 1px; }
+  @keyframes blink { 50% { opacity: 0; } }
+  @keyframes glitch {
+    0%, 90%, 100% { transform: translate(0); }
+    92% { transform: translate(-1px, 1px); }
+    94% { transform: translate(1px, -1px); }
+    96% { transform: translate(-2px, -1px); }
+    98% { transform: translate(1px, 1px); }
+  }
+  .logo:hover { animation: glitch 0.3s linear; }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .badge { background: rgba(0,200,212,0.06); border: 1px solid rgba(0,200,212,0.15); color: var(--muted); font-size: 9px; padding: 2px 10px; border-radius: 12px; letter-spacing: 0.05em; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 20px 24px; position: relative; z-index: 2; }
+  .container > .term-window + .term-window { margin-top: 20px; }
+  .stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+  .stat-card {
+    background: rgba(12,12,22,0.85);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    transition: border-color 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .stat-card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(0,200,212,0.08), transparent);
+  }
+  .stat-card:hover { border-color: rgba(0,200,212,0.12); }
+  .stat-card.total { border-color: rgba(0,200,212,0.12); }
+  .stat-card.total .stat-num { color: var(--teal-lt); font-size: 24px; }
+  .stat-card.alertas { border-color: rgba(232,72,72,0.12); }
+  .stat-card.alertas .stat-num { color: var(--down); font-size: 24px; }
+  .stat-num { font-size: 20px; font-weight: 500; color: var(--teal-lt); font-variant-numeric: tabular-nums; }
+  .stat-label { font-size: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 3px; }
+  .stat-card.up { border-left: 2px solid var(--up); }
   .stat-card.up .stat-num { color: var(--up); }
-  .stat-card.down { border-left: 3px solid var(--down); }
+  .stat-card.down { border-left: 2px solid var(--down); }
   .stat-card.down .stat-num { color: var(--down); }
-  .stat-card.warn { border-left: 3px solid var(--warn); }
+  .stat-card.warn { border-left: 2px solid var(--warn); }
   .stat-card.warn .stat-num { color: var(--warn); }
-  .table-wrap { overflow-x: auto; overflow-y: hidden; border: 1px solid var(--border); border-radius: var(--radius); min-height: 100px; }
+  .table-wrap { overflow-x: auto; overflow-y: hidden; background: rgba(10,10,18,0.4); position: relative; }
   table { width: 100%; border-collapse: collapse; font-size: 11px; }
   .table-dispositivos { min-width: 1100px; }
-  thead { background: var(--hover); border-bottom: 1px solid var(--border); }
-  th { padding: 10px 8px; text-align: left; color: var(--teal); font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 600; white-space: nowrap; }
-  td { padding: 10px 8px; color: var(--muted); border-bottom: 1px solid rgba(48,54,61,0.4); font-family: var(--font); transition: background 0.15s; white-space: nowrap; }
+  thead th {
+    padding: 10px 8px; text-align: left; color: var(--teal); font-size: 9px;
+    letter-spacing: 0.1em; text-transform: uppercase; font-weight: 500;
+    white-space: nowrap; border-bottom: 1px solid rgba(0,200,212,0.12);
+    background: rgba(0,200,212,0.02);
+  }
+  td { padding: 9px 8px; color: var(--muted); border-bottom: 1px solid rgba(24,24,42,0.6); font-family: var(--font); transition: background 0.15s; white-space: nowrap; }
   tr:last-child td { border-bottom: none; }
   tbody tr { transition: background 0.1s; }
-  tbody tr:hover td { background: rgba(14,165,160,0.08); }
-  tbody tr:hover + tr td { border-top-color: transparent; }
+  tbody tr:hover td { background: rgba(0,200,212,0.03); }
   td:first-child { color: var(--text); font-weight: 500; }
-  .status-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 4px; box-shadow: 0 0 4px rgba(0,0,0,0.3); }
-  .dot-up { background: var(--up); box-shadow: 0 0 4px rgba(34,197,94,0.4); }
-  .dot-degradado { background: var(--degradado); box-shadow: 0 0 4px rgba(249,115,22,0.5); }
-  .dot-down { background: var(--down); box-shadow: 0 0 4px rgba(239,68,68,0.4); }
-  .dot-warn { background: var(--warn); box-shadow: 0 0 4px rgba(245,158,11,0.4); }
+  tr:nth-child(even) td { background: rgba(0,0,0,0.15); }
+  tr:nth-child(even):hover td { background: rgba(0,200,212,0.04); }
+  .status-dot { display: inline-block; width: 5px; height: 5px; border-radius: 50%; margin-right: 5px; }
+  .dot-up { background: var(--up); }
+  .dot-degradado { background: var(--degradado); }
+  .dot-down { background: var(--down); }
+  .dot-warn { background: var(--warn); }
   .dot-unknown { background: var(--border); }
-  .tipo-tag { background: rgba(14,165,160,0.08); border: 1px solid rgba(14,165,160,0.2); border-radius: 4px; padding: 2px 8px; font-size: 10px; color: var(--teal-lt); }
-  .controles { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .tipo-tag { background: rgba(0,200,212,0.04); border: 1px solid rgba(0,200,212,0.08); border-radius: 3px; padding: 1px 6px; font-size: 9px; color: var(--teal-lt); }
+  .controles { display: flex; gap: 6px; padding: 10px 14px 8px; flex-wrap: wrap; align-items: center; border-bottom: 1px solid rgba(24,24,42,0.15); }
   .btn {
-    background: var(--surface); border: 1px solid var(--border); color: var(--muted);
-    padding: 6px 14px; border-radius: var(--radius); font-family: var(--font);
-    font-size: 11px; cursor: pointer; transition: all 0.2s;
+    background: transparent; border: 1px solid var(--border); color: var(--muted);
+    padding: 5px 12px; border-radius: var(--radius); font-family: var(--font);
+    font-size: 10px; cursor: pointer; transition: all 0.2s; letter-spacing: 0.02em;
   }
-  .btn:hover { border-color: var(--teal); color: var(--teal-lt); background: rgba(14,165,160,0.05); }
-  .btn-primary { background: rgba(14,165,160,0.12); border-color: rgba(14,165,160,0.4); color: var(--teal-lt); }
-  .btn-primary:hover { background: rgba(14,165,160,0.25); border-color: var(--teal); }
-  .btn-sm { padding: 3px 8px; font-size: 13px; line-height: 1; }
-  .contador { color: var(--muted); font-size: 11px; margin-left: auto; }
+  .btn:hover { border-color: rgba(0,200,212,0.25); color: var(--teal); background: rgba(0,200,212,0.03); }
+  .btn-primary { background: rgba(0,200,212,0.06); border-color: rgba(0,200,212,0.15); color: var(--teal); }
+  .btn-primary:hover { background: rgba(0,200,212,0.12); border-color: rgba(0,200,212,0.25); }
+  .btn-sm { padding: 2px 6px; font-size: 12px; line-height: 1; }
+  .contador { color: var(--muted); font-size: 10px; margin-left: auto; }
   @keyframes refreshPulse { 0%{opacity:1;} 50%{opacity:0.5;} 100%{opacity:1;} }
   .refreshing #tablaBody { animation: refreshPulse 0.4s ease; }
   .toast {
-    position: fixed; bottom: 24px; right: 24px; background: var(--teal); color: #000;
-    padding: 10px 18px; border-radius: var(--radius); font-size: 12px;
-    font-weight: 600; opacity: 0; transition: opacity 0.3s; z-index: 10000;
-    pointer-events: none;
+    position: fixed; bottom: 24px; right: 24px; background: rgba(0,200,212,0.9); color: #000;
+    padding: 8px 16px; border-radius: var(--radius); font-size: 11px;
+    font-weight: 500; opacity: 0; transition: opacity 0.3s; z-index: 10000;
+    pointer-events: none; backdrop-filter: blur(4px);
   }
   .toast.show { opacity: 1; }
+  /* ── Terminal window ── */
+  .term-window { border: 1px solid var(--border); border-radius: var(--radius); background: rgba(10,10,18,0.6); overflow: hidden; }
+  .term-bar { padding: 8px 14px; border-bottom: 1px solid rgba(24,24,42,0.3); background: rgba(0,0,0,0.25); user-select: none; display: flex; align-items: center; gap: 8px; font-size: 10px; color: var(--muted); font-family: var(--font); }
+  .term-bar .prompt-user { color: var(--green); font-weight: 500; }
+  .term-bar .prompt-at { color: var(--muted); }
+  .term-bar .prompt-host { color: var(--teal); font-weight: 500; }
+  .term-bar .prompt-path { color: var(--teal-lt); }
+  .term-bar .prompt-sym { color: var(--green); font-weight: 700; }
+
+  /* ── Modal ── */
   .modal-overlay {
-    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85);
     z-index: 1000; align-items: center; justify-content: center;
   }
   .modal-overlay.active { display: flex; }
   .modal {
-    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 24px; width: 400px; max-width: 90vw;
+    background: rgba(12,12,22,0.96);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px; width: 400px; max-width: 90vw;
   }
   .modal.wide { width: 720px; }
-  .modal h3 { color: var(--teal-lt); margin-bottom: 16px; font-size: 14px; }
-  .modal input { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text);
-    padding: 8px 12px; border-radius: var(--radius); font-family: var(--font); font-size: 12px;
-    margin-bottom: 12px; }
-  .modal input:focus { outline: none; border-color: var(--teal); }
+  .modal h3 { color: var(--teal-lt); margin-bottom: 14px; font-size: 13px; font-weight: 500; letter-spacing: 0.02em; }
+  .modal input { width: 100%; background: rgba(0,0,0,0.4); border: 1px solid var(--border); color: var(--text);
+    padding: 7px 10px; border-radius: var(--radius); font-family: var(--font); font-size: 11px;
+    margin-bottom: 10px; }
+  .modal input:focus { outline: none; border-color: rgba(0,200,212,0.25); }
   .modal-btns { display: flex; gap: 8px; justify-content: flex-end; }
+
+  /* ── Footer ── */
+  .footer { margin-top: 40px; padding: 16px 24px; border-top: 1px solid var(--border); text-align: center; font-size: 9px; color: rgba(112,120,136,0.4); letter-spacing: 0.1em; }
+  .footer strong { color: rgba(112,120,136,0.6); font-weight: 500; }
 </style>
 </head>
 <body>
+  <canvas id="bgCanvas"></canvas>
   <header class="header">
-    <div class="logo">Vig<span>IA</span></div>
+    <div class="logo">Vig<span>IA</span><span style="font-size:9px;color:var(--muted);margin-left:8px;letter-spacing:1px;font-weight:300;">// NETWORK MONITOR</span></div>
     <div class="header-right">
-      <span class="badge">v0.1</span>
-      <span class="badge" id="clienteBadge">red_cliente</span>
-      <button class="btn" onclick="mostrarModalCliente()" style="font-size:10px;padding:2px 8px;">⬇ cliente</button>
-      <span class="badge" id="pollBadge">⏹ detenido</span>
+      <span class="badge" style="color:var(--green);border-color:rgba(0,204,119,0.15);">● SYS.ONLINE</span>
+      <span class="badge" id="clienteBadge" style="max-width:140px;overflow:hidden;text-overflow:ellipsis;" data-cliente="red_cliente">● red_cliente</span>
+      <button class="btn" onclick="mostrarModalCliente()" style="font-size:9px;padding:2px 7px;">⌄ DB</button>
+      <span class="badge" id="pollBadge">⏹ IDLE</span>
+      <span class="badge" style="border-color:rgba(0,204,119,0.1);color:rgba(112,120,136,0.5);font-size:8px;">alejo_fix</span>
     </div>
   </header>
 
   <div class="container">
-    <div class="stats">
-      <div class="stat-card total"><div class="stat-num" id="numTotal">0</div><div class="stat-label">Dispositivos</div></div>
-      <div class="stat-card up"><div class="stat-num" id="numUp">0</div><div class="stat-label">Activos</div></div>
-      <div class="stat-card" style="border-left-color:var(--warn);"><div class="stat-num" id="numWarn">0</div><div class="stat-label" style="color:var(--warn);">Latencia alta</div></div>
-      <div class="stat-card" style="border-left-color:var(--degradado);"><div class="stat-num" id="numDegradados">0</div><div class="stat-label" style="color:var(--degradado);">Degradados</div></div>
-      <div class="stat-card down"><div class="stat-num" id="numDown">0</div><div class="stat-label">Caidos</div></div>
-      <div class="stat-card alertas"><div class="stat-num" id="numAlertas">0</div><div class="stat-label">Alertas</div></div>
+    <div class="term-window">
+      <div class="term-bar">
+        <span><span class="prompt-user">alejo_fix</span><span class="prompt-at">@</span><span class="prompt-host">vigia</span><span class="prompt-at">:</span><span class="prompt-path">~/stats</span><span class="prompt-sym">$</span></span>
+        <span style="flex:1;"></span>
+        <span class="prompt-path" style="font-size:9px;">LAST POLL: <span id="ultimoPoll">—</span></span>
+      </div>
+      <div class="term-body" style="padding:14px;">
+        <div class="stats">
+          <div class="stat-card total"><div class="stat-num" id="numTotal">0</div><div class="stat-label">Dispositivos</div></div>
+          <div class="stat-card up"><div class="stat-num" id="numUp">0</div><div class="stat-label">Activos</div></div>
+          <div class="stat-card" style="border-left-color:var(--warn);"><div class="stat-num" id="numWarn">0</div><div class="stat-label" style="color:var(--warn);">Latencia alta</div></div>
+          <div class="stat-card" style="border-left-color:var(--degradado);"><div class="stat-num" id="numDegradados">0</div><div class="stat-label" style="color:var(--degradado);">Degradados</div></div>
+          <div class="stat-card down"><div class="stat-num" id="numDown">0</div><div class="stat-label">Caidos</div></div>
+          <div class="stat-card alertas"><div class="stat-num" id="numAlertas">0</div><div class="stat-label">Alertas</div></div>
+        </div>
+      </div>
     </div>
 
-      <div class="controles">
-      <button class="btn" onclick="mostrarModalScan()">+ Escanear</button>
-      <button class="btn btn-primary" id="btnPoll" onclick="togglePoll()">▶ Monitorear</button>
-      <select id="pollIntervalo" style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
-        <option value="10">10s</option>
-        <option value="20">20s</option>
-        <option value="30" selected>30s</option>
-      </select>
-      <button class="btn" onclick="cargarDatos()">⟳ Recargar</button>
-      <button class="btn" onclick="generarReporte('html')">📄 Reporte HTML</button>
-      <button class="btn" onclick="generarReporte('txt')">📃 Reporte TXT</button>
-      <button class="btn" onclick="mostrarIPPublica()">🌐 IP Pública</button>
-      <a href="/mapa" class="btn" target="_blank">🗺 Mapa</a>
-      <span class="contador" id="contador">—</span>
-      <span id="statusMsg" style="font-size:10px;color:var(--warn);"></span>
-    </div>
+    <div class="term-window" style="margin-top:20px;">
+      <div class="term-bar">
+        <span><span class="prompt-user">alejo_fix</span><span class="prompt-at">@</span><span class="prompt-host">vigia</span><span class="prompt-at">:</span><span class="prompt-path">~/interfaces</span><span class="prompt-sym">$</span> <span id="statusMsg" style="color:var(--warn);font-weight:400;font-size:10px;"></span></span>
+        <span style="flex:1;"></span>
+        <span class="prompt-path" style="font-size:9px;"><span id="contadorHosts" style="color:var(--muted);">—</span></span>
+      </div>
+      <div class="term-body">
+        <div class="controles">
+          <button class="btn" onclick="mostrarModalScan()">+ Scan</button>
+          <button class="btn btn-primary" id="btnPoll" onclick="togglePoll()">▶ Monitor</button>
+          <select id="pollIntervalo" style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:4px;font-family:var(--font);font-size:10px;">
+            <option value="10">10s</option>
+            <option value="20">20s</option>
+            <option value="30" selected>30s</option>
+          </select>
+          <button class="btn" onclick="cargarDatos()">↻ Reload</button>
+          <button class="btn" onclick="generarReporte('html')">📄 HTML</button>
+          <button class="btn" onclick="generarReporte('txt')">📃 TXT</button>
+          <button class="btn" onclick="mostrarIPPublica()">🌐 IP</button>
+          <a href="/mapa" class="btn" target="_blank">🗺 Map</a>
+          <span class="contador" id="contador">—</span>
+        </div>
 
-    <div class="table-wrap">
-      <table class="table-dispositivos">
-        <thead><tr>
-          <th>IP</th><th>Alias</th><th>Hostname</th><th>Asignación</th><th>MAC</th><th>Fabricante</th><th>Tipo</th><th>Estado</th><th>Latencia</th><th>Ultima vez</th><th></th>
-        </tr></thead>
-        <tbody id="tablaBody"></tbody>
-      </table>
+        <div class="table-wrap">
+          <table class="table-dispositivos">
+            <thead><tr>
+              <th>IP</th><th>Asignación</th><th>Alias</th><th>Hostname</th><th>MAC</th><th>Fabricante</th><th>Tipo</th><th>Estado</th><th>Latencia</th><th>Ultima vez</th><th></th>
+            </tr></thead>
+            <tbody id="tablaBody"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
     <div style="display:flex;gap:24px;margin-top:32px;flex-wrap:wrap;">
       <div style="flex:2;min-width:300px;">
-        <div class="stat-label" style="margin-bottom:12px;color:var(--warn);display:flex;align-items:center;gap:8px;">
-          <span>Alertas recientes</span>
-          <button class="btn" onclick="borrarAlertas()" style="font-size:10px;padding:2px 8px;color:var(--down);">✕ Borrar</button>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Fecha</th><th>Dispositivo</th><th>Tipo</th><th>Mensaje</th><th></th></tr></thead>
-            <tbody id="alertasBody"></tbody>
-          </table>
+        <div class="term-window">
+          <div class="term-bar">
+            <span><span class="prompt-user">alejo_fix</span><span class="prompt-at">@</span><span class="prompt-host">vigia</span><span class="prompt-at">:</span><span class="prompt-path">~/alerts</span><span class="prompt-sym">$</span></span>
+            <span style="flex:1;"></span>
+            <button class="btn" onclick="borrarAlertas()" style="font-size:9px;padding:1px 6px;color:var(--down);border-color:rgba(232,72,72,0.2);">✕ CLEAR</button>
+          </div>
+          <div class="term-body">
+            <div class="table-wrap" style="overflow:visible;">
+              <table>
+                <thead><tr><th>Fecha</th><th>Dispositivo</th><th>Tipo</th><th>Mensaje</th><th></th></tr></thead>
+                <tbody id="alertasBody"></tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
 
       <div style="flex:1;min-width:280px;">
-        <div class="stat-label" style="margin-bottom:12px;color:var(--teal);">Chat IA</div>
-        <div id="chatBox" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;height:300px;overflow-y:auto;margin-bottom:8px;font-size:12px;line-height:1.6;">
-          <div style="color:var(--muted);font-style:italic;">Pregunta sobre el estado de la red...</div>
-        </div>
-        <div style="display:flex;gap:6px;">
-          <input id="chatInput" placeholder="Ej: cuantas camaras estan caidas?" style="flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:var(--radius);font-family:var(--font);font-size:11px;">
-          <button class="btn btn-primary" onclick="enviarChat()">→</button>
+        <div class="term-window">
+          <div class="term-bar">
+            <span><span class="prompt-user">alejo_fix</span><span class="prompt-at">@</span><span class="prompt-host">vigia</span><span class="prompt-at">:</span><span class="prompt-path">~/chat</span><span class="prompt-sym">$</span></span>
+          </div>
+          <div class="term-body" style="padding:12px;">
+            <div id="chatBox" style="background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:4px;padding:12px;height:260px;overflow-y:auto;margin-bottom:8px;font-size:12px;line-height:1.6;">
+              <div style="color:var(--muted);font-style:italic;">Pregunta sobre el estado de la red...</div>
+            </div>
+            <div style="display:flex;gap:6px;">
+              <input id="chatInput" placeholder="ej: cuantas camaras estan caidas?" style="flex:1;background:rgba(0,0,0,0.4);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:4px;font-family:var(--font);font-size:11px;">
+              <button class="btn btn-primary" onclick="enviarChat()" style="padding:6px 12px;">↵</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -221,7 +330,7 @@
   <div class="modal-overlay" id="modalCliente">
     <div class="modal">
       <h3>Cambiar cliente</h3>
-      <select id="selectCliente" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;margin-bottom:12px;"></select>
+      <select id="selectCliente" style="width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;margin-bottom:12px;"></select>
       <div class="modal-btns">
         <button class="btn" onclick="cerrarModalCliente()">Cancelar</button>
         <button class="btn btn-primary" onclick="cambiarCliente()">Cambiar</button>
@@ -267,6 +376,10 @@
         <button class="btn btn-primary" onclick="guardarCredenciales()">Guardar</button>
       </div>
     </div>
+  </div>
+
+  <div class="footer">
+    <span class="prompt-sym">$</span> <span class="prompt-user">alejo_fix</span> <span class="prompt-at">//</span> <strong style="color:rgba(0,204,119,0.5);font-weight:400;">MARDAN COLOMBIA</strong> <span class="prompt-at">//</span> VIGIA v0.1
   </div>
 
   <div class="toast" id="toast"></div>
@@ -352,6 +465,7 @@ async function cargarStats() {
     document.getElementById('numDegradados').textContent = s.degradados;
     document.getElementById('numDown').textContent = s.caidos;
     document.getElementById('numAlertas').textContent = s.alertas_pendientes;
+    document.getElementById('ultimoPoll').textContent = new Date().toLocaleTimeString();
   } catch (e) { console.error('Stats error:', e); }
 }
 
@@ -383,14 +497,14 @@ async function cargarDispositivos() {
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td style="color:${ipColor};font-weight:600;">${d.ip}</td>
-        <td style="font-weight:600;">${d.alias || '—'}</td>
-        <td>${d.hostname || '—'}</td>
         <td><select class="asig-select" data-id="${d.id}" style="font-size:11px;padding:2px 2px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);width:100%;min-width:80px;">
           <option value="desconocido" ${asig==='desconocido'?'selected':''}>—</option>
           <option value="dhcp" ${asig==='dhcp'?'selected':''}>DHCP</option>
           <option value="reservada" ${asig==='reservada'?'selected':''}>Reservada</option>
           <option value="estatica" ${asig==='estatica'?'selected':''}>Estática</option>
         </select></td>
+        <td style="font-weight:600;">${d.alias || '—'}</td>
+        <td>${d.hostname || '—'}</td>
         <td style="font-size:10px;color:var(--muted);font-family:monospace;">${d.mac || '—'}</td>
         <td style="font-size:10px;color:var(--muted);">${d.fabricante || '—'}</td>
         <td><span class="tipo-tag">${d.tipo || 'desconocido'}</span></td>
@@ -416,6 +530,7 @@ async function cargarDispositivos() {
       });
       tbody.appendChild(tr);
     }
+    document.getElementById('contadorHosts').textContent = `${data.length} hosts`;
   } catch (e) { console.error('Dispositivos error:', e); }
 }
 
@@ -424,6 +539,11 @@ async function cargarAlertas() {
     const data = await apiFetch('/api/alertas?resuelta=0');
     const tbody = document.getElementById('alertasBody');
     tbody.innerHTML = '';
+
+    if (data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--muted);font-size:11px;">Sin alertas pendientes</td></tr>';
+      return;
+    }
 
     for (const a of data) {
       let dispIp = '—';
@@ -466,8 +586,12 @@ async function cargarDatos() {
   setTimeout(() => document.body.classList.remove('refreshing'), 500);
 }
 
+function clienteActivo() {
+  return document.getElementById('clienteBadge').dataset.cliente || 'red_cliente';
+}
+
 async function generarReporte(formato) {
-  const cliente = document.getElementById('clienteBadge').textContent;
+  const cliente = clienteActivo();
   toast(`Generando reporte ${formato.toUpperCase()}...`);
   try {
     const res = await apiFetch('/api/reporte?nombre_cliente=' + encodeURIComponent(cliente) + '&formato=' + formato, {
@@ -489,7 +613,7 @@ async function enviarChat() {
   chatBox.innerHTML += `<div style="color:var(--muted);font-style:italic;margin-bottom:8px;">Pensando...</div>`;
   chatBox.scrollTop = chatBox.scrollHeight;
 
-  const cliente = document.getElementById('clienteBadge').textContent;
+  const cliente = clienteActivo();
   try {
     const res = await apiFetch('/api/chat', {
       method: 'POST',
@@ -523,7 +647,8 @@ async function iniciarScan() {
   const cliente = document.getElementById('inputCliente').value.trim() || 'red_cliente';
   if (!rango) { toast('Ingresa un rango IP'); return; }
   cerrarModalScan();
-  document.getElementById('clienteBadge').textContent = cliente;
+  document.getElementById('clienteBadge').textContent = '● ' + cliente;
+  document.getElementById('clienteBadge').dataset.cliente = cliente;
   try {
     const res = await apiFetch('/api/scan', {
       method: 'POST',
@@ -596,7 +721,8 @@ async function cambiarCliente() {
       method: 'POST',
       body: JSON.stringify({ nombre_cliente: cliente }),
     });
-    document.getElementById('clienteBadge').textContent = cliente;
+    document.getElementById('clienteBadge').textContent = '● ' + cliente;
+    document.getElementById('clienteBadge').dataset.cliente = cliente;
     toast('Cliente cambiado a: ' + cliente);
     cargarDatos();
   } catch (e) {
@@ -624,7 +750,7 @@ function togglePoll() {
   pollContador = 0;
   pollIntervalId = setInterval(async () => {
     try {
-      await apiFetch('/api/poll?nombre_cliente=' + document.getElementById('clienteBadge').textContent);
+      await apiFetch('/api/poll?nombre_cliente=' + encodeURIComponent(clienteActivo()));
       cargarDatos();
     } catch (_) {}
   }, ms);
@@ -757,6 +883,87 @@ async function borrarAlertas() {
     toast('Error al borrar alertas');
   }
 }
+
+// ── Canvas: electromagnetic waves ──
+(function() {
+  const canvas = document.getElementById('bgCanvas');
+  const ctx = canvas.getContext('2d');
+  let w, h, time = 0;
+
+  function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // Emitters for concentric waves
+  const emitters = [
+    { x: w * 0.2, y: h * 0.3, phase: 0 },
+    { x: w * 0.8, y: h * 0.6, phase: 2 },
+    { x: w * 0.5, y: h * 0.8, phase: 4 },
+  ];
+  window.addEventListener('resize', () => {
+    emitters[0].x = w * 0.2; emitters[0].y = h * 0.3;
+    emitters[1].x = w * 0.8; emitters[1].y = h * 0.6;
+    emitters[2].x = w * 0.5; emitters[2].y = h * 0.8;
+  });
+
+  function draw() {
+    ctx.clearRect(0, 0, w, h);
+    time += 0.01;
+
+    // ── Oscilloscope sine waves ──
+    const waves = [
+      { amp: 40, freq: 0.008, speed: 0.6, yOff: 0.15, alpha: 0.08 },
+      { amp: 28, freq: 0.015, speed: 0.4, yOff: 0.35, alpha: 0.06 },
+      { amp: 50, freq: 0.005, speed: 0.5, yOff: 0.55, alpha: 0.05 },
+      { amp: 20, freq: 0.025, speed: 0.7, yOff: 0.75, alpha: 0.04 },
+      { amp: 35, freq: 0.01, speed: 0.35, yOff: 0.9, alpha: 0.06 },
+    ];
+    for (const wave of waves) {
+      ctx.beginPath();
+      ctx.strokeStyle = `rgba(0,200,212,${wave.alpha})`;
+      ctx.lineWidth = 1.2;
+      for (let x = 0; x < w; x += 2) {
+        const yBase = h * wave.yOff;
+        const y = yBase + Math.sin(x * wave.freq + time * wave.speed) * wave.amp
+                         + Math.sin(x * wave.freq * 2.3 + time * wave.speed * 1.7) * (wave.amp * 0.3);
+        x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      // glow
+      ctx.beginPath();
+      ctx.strokeStyle = `rgba(0,240,255,${wave.alpha * 0.2})`;
+      ctx.lineWidth = 4;
+      for (let x = 0; x < w; x += 2) {
+        const yBase = h * wave.yOff;
+        const y = yBase + Math.sin(x * wave.freq + time * wave.speed) * wave.amp
+                         + Math.sin(x * wave.freq * 2.3 + time * wave.speed * 1.7) * (wave.amp * 0.3);
+        x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    // ── Concentric electromagnetic rings ──
+    for (const e of emitters) {
+      const rings = 6;
+      for (let r = 0; r < rings; r++) {
+        const radius = (time * 50 + r * 70 + e.phase * 30) % 400;
+        const alpha = 0.06 * (1 - radius / 400);
+        if (alpha < 0.02) continue;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(0,200,212,${alpha})`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+    }
+
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
 
 cargarDatos();
 </script>

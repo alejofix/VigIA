@@ -79,6 +79,14 @@ def _mac_local() -> str:
     return ""
 
 
+def _alerta_pendiente(session, dispositivo_id: int, tipo: str) -> bool:
+    return session.query(Alerta).filter(
+        Alerta.dispositivo_id == dispositivo_id,
+        Alerta.tipo == tipo,
+        Alerta.resuelta == 0,
+    ).first() is not None
+
+
 def procesar_dispositivo(session: Session, dispositivo: Dispositivo):
     resultado = hacer_ping(dispositivo.ip)
     estado_anterior = obtener_ultimo_estado(session, dispositivo.id)
@@ -101,8 +109,9 @@ def procesar_dispositivo(session: Session, dispositivo: Dispositivo):
     )
     session.add(ping)
 
-    if estado_anterior != resultado["estado"]:
-        if resultado["estado"] == "down":
+    debe_alertar = estado_anterior != resultado["estado"]
+    if resultado["estado"] == "down":
+        if debe_alertar or not _alerta_pendiente(session, dispositivo.id, "caida"):
             alerta = Alerta(
                 dispositivo_id=dispositivo.id,
                 tipo="caida",
@@ -115,7 +124,8 @@ def procesar_dispositivo(session: Session, dispositivo: Dispositivo):
                 f"Dispositivo {dispositivo.ip} ({dispositivo.hostname or 'sin hostname'}) "
                 f"ha caido. Tipo: {dispositivo.tipo or 'desconocido'}.",
             )
-        elif resultado["estado"] == "degradado":
+    elif resultado["estado"] == "degradado":
+        if debe_alertar or not _alerta_pendiente(session, dispositivo.id, "degradado"):
             alerta = Alerta(
                 dispositivo_id=dispositivo.id,
                 tipo="degradado",
@@ -128,7 +138,8 @@ def procesar_dispositivo(session: Session, dispositivo: Dispositivo):
                 f"Dispositivo {dispositivo.ip} ({dispositivo.hostname or 'sin hostname'}) "
                 f"degradado por perdida de paquetes y latencia alta.",
             )
-        elif resultado["estado"] == "warn":
+    elif resultado["estado"] == "warn":
+        if debe_alertar or not _alerta_pendiente(session, dispositivo.id, "latencia_alta"):
             alerta = Alerta(
                 dispositivo_id=dispositivo.id,
                 tipo="latencia_alta",
