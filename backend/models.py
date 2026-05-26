@@ -22,6 +22,7 @@ class Dispositivo(Base):
     segmento = Column(Text)
     serial = Column(Text)
     activo = Column(Integer, default=1)
+    tipo_asignacion_ip = Column(Text, default="desconocido")
 
     pings = relationship("Ping", back_populates="dispositivo", cascade="all, delete-orphan")
     servicios = relationship("Servicio", back_populates="dispositivo", cascade="all, delete-orphan")

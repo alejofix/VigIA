@@ -10,6 +10,7 @@ class DispositivoCreate(BaseModel):
     fabricante: Optional[str] = None
     tipo: Optional[str] = None
     descripcion: Optional[str] = None
+    tipo_asignacion_ip: Optional[str] = "desconocido"
 
 
 class DispositivoOut(BaseModel):
@@ -26,6 +27,7 @@ class DispositivoOut(BaseModel):
     activo: int = 1
     segmento: Optional[str] = None
     serial: Optional[str] = None
+    tipo_asignacion_ip: Optional[str] = "desconocido"
 
 
 class PingOut(BaseModel):
@@ -92,6 +94,12 @@ class NotificacionRequest(BaseModel):
 
 class ClienteSwitch(BaseModel):
     nombre_cliente: str
+
+
+class DispositivoConEstado(DispositivoOut):
+    estado: str = "desconocido"
+    latencia_ms: Optional[float] = None
+    alias: Optional[str] = None
 
 
 class CredencialCreate(BaseModel):

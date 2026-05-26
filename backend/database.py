@@ -40,13 +40,17 @@ def get_session(db_path: str):
 
 
 def init_db(db_path: str):
-    engine = create_engine(f"sqlite:///{db_path}")
+    engine = create_engine_for_db(db_path)
     Base.metadata.create_all(engine)
     with engine.connect() as conn:
         from sqlalchemy import text
         try:
             conn.execute(text("ALTER TABLE credenciales ADD COLUMN alias TEXT"))
-            conn.commit()
         except Exception:
             pass
+        try:
+            conn.execute(text("ALTER TABLE dispositivos ADD COLUMN tipo_asignacion_ip TEXT DEFAULT 'desconocido'"))
+        except Exception:
+            pass
+        conn.commit()
     return engine

@@ -75,11 +75,13 @@
   .stat-card.down { border-left: 3px solid var(--down); }
   .stat-card.down .stat-num { color: var(--down); }
   .stat-card.warn { border-left: 3px solid var(--warn); }
-  .stat-card.warn .stat-num { color: var(--warn); }  .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+  .stat-card.warn .stat-num { color: var(--warn); }
+  .table-wrap { overflow-x: auto; overflow-y: hidden; border: 1px solid var(--border); border-radius: var(--radius); min-height: 100px; }
   table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .table-dispositivos { min-width: 1100px; }
   thead { background: var(--hover); border-bottom: 1px solid var(--border); }
-  th { padding: 10px 14px; text-align: left; color: var(--teal); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600; white-space: nowrap; }
-  td { padding: 10px 14px; color: var(--muted); border-bottom: 1px solid rgba(48,54,61,0.4); font-family: var(--font); transition: background 0.15s; }
+  th { padding: 10px 8px; text-align: left; color: var(--teal); font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase; font-weight: 600; white-space: nowrap; }
+  td { padding: 10px 8px; color: var(--muted); border-bottom: 1px solid rgba(48,54,61,0.4); font-family: var(--font); transition: background 0.15s; white-space: nowrap; }
   tr:last-child td { border-bottom: none; }
   tbody tr { transition: background 0.1s; }
   tbody tr:hover td { background: rgba(14,165,160,0.08); }
@@ -138,7 +140,6 @@
       <span class="badge" id="clienteBadge">red_cliente</span>
       <button class="btn" onclick="mostrarModalCliente()" style="font-size:10px;padding:2px 8px;">⬇ cliente</button>
       <span class="badge" id="pollBadge">⏹ detenido</span>
-      <button class="btn" onclick="mostrarIPPublica()" style="font-size:10px;padding:2px 8px;">🌐 IP Pública</button>
     </div>
   </header>
 
@@ -163,15 +164,16 @@
       <button class="btn" onclick="cargarDatos()">⟳ Recargar</button>
       <button class="btn" onclick="generarReporte('html')">📄 Reporte HTML</button>
       <button class="btn" onclick="generarReporte('txt')">📃 Reporte TXT</button>
+      <button class="btn" onclick="mostrarIPPublica()">🌐 IP Pública</button>
       <a href="/mapa" class="btn" target="_blank">🗺 Mapa</a>
       <span class="contador" id="contador">—</span>
       <span id="statusMsg" style="font-size:10px;color:var(--warn);"></span>
     </div>
 
     <div class="table-wrap">
-      <table>
+      <table class="table-dispositivos">
         <thead><tr>
-          <th>IP</th><th>Hostname</th><th>MAC</th><th>Fabricante</th><th>Tipo</th><th>Estado</th><th>Latencia</th><th>Ultima vez</th><th></th>
+          <th>IP</th><th>Alias</th><th>Hostname</th><th>Asignación</th><th>MAC</th><th>Fabricante</th><th>Tipo</th><th>Estado</th><th>Latencia</th><th>Ultima vez</th><th></th>
         </tr></thead>
         <tbody id="tablaBody"></tbody>
       </table>
@@ -249,16 +251,16 @@
           <label style="font-size:11px;color:var(--muted);">Número de serie <span style="color:var(--warn);">no detectado</span></label>
           <input id="inputSerial" type="text" placeholder="ingresar serial manualmente" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
         </div>
-        <label style="font-size:11px;color:var(--muted);">Alias <span style="color:var(--teal);">opcional</span></label>
-        <input id="inputAlias" placeholder="ej: camara porton, router principal" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
+        <label style="font-size:11px;color:var(--muted);">Alias</label>
+        <input id="inputAlias" placeholder="alias del dispositivo" autocomplete="off" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
         <label style="font-size:11px;color:var(--muted);">Contraseña de administración</label>
-        <input id="inputAdminPass" type="text" placeholder="admin password" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
-        <label style="font-size:11px;color:var(--muted);">Usuario (nombre / cel / correo) <span style="color:var(--teal);">opcional</span></label>
-        <input id="inputUsuario" placeholder="usuario" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
-        <label style="font-size:11px;color:var(--muted);">Contraseña de app <span style="color:var(--teal);">opcional</span></label>
-        <input id="inputAppPass" type="password" placeholder="app password" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
+        <input id="inputAdminPass" type="text" placeholder="contraseña" autocomplete="off" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
+        <label style="font-size:11px;color:var(--muted);">Usuario de app</label>
+        <input id="inputUsuario" placeholder="usuario de app" autocomplete="off" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
+        <label style="font-size:11px;color:var(--muted);">Contraseña de app</label>
+        <input id="inputAppPass" type="password" placeholder="contraseña" autocomplete="off" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
         <label style="font-size:11px;color:var(--muted);">Observación</label>
-        <textarea id="inputObservacion" placeholder="ej: credencial por defecto del fabricante" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;resize:vertical;"></textarea>
+        <textarea id="inputObservacion" placeholder="notas" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;resize:vertical;"></textarea>
       </div>
       <div class="modal-btns" style="margin-top:14px;">
         <button class="btn" onclick="cerrarModalCredenciales()">Cancelar</button>
@@ -290,15 +292,6 @@ let pollActivo = false;
 var API_BASE = '';
 if (window.location.port === '' || window.location.port === '80' || window.location.port === '443') {
   API_BASE = 'http://localhost:8080';
-}
-
-async function apiFetch(url, opts = {}) {
-  const resp = await fetch(API_BASE + url, {
-    headers: { 'Content-Type': 'application/json', ...opts.headers },
-    ...opts,
-  });
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-  return resp.json();
 }
 
 async function apiFetch(url, opts = {}) {
@@ -364,23 +357,14 @@ async function cargarStats() {
 
 async function cargarDispositivos() {
   try {
-    const data = await apiFetch('/api/dispositivos');
+    const data = await apiFetch('/api/dispositivos/con-estado');
     const tbody = document.getElementById('tablaBody');
     tbody.innerHTML = '';
 
-    const ultimosPings = {};
-    for (const d of data) {
-      try {
-        const pings = await apiFetch(`/api/dispositivos/${d.id}/pings?limite=1`);
-        if (pings.length > 0) ultimosPings[d.id] = pings[0];
-      } catch (_) {}
-    }
-
     let upCount = 0, downCount = 0;
     for (const d of data) {
-      const ping = ultimosPings[d.id];
-      const estado = ping ? ping.estado : 'desconocido';
-      const latencia = ping ? ping.latencia_ms : null;
+      const estado = d.estado || 'desconocido';
+      const latencia = d.latencia_ms;
       const ultima = d.ultima_vez ? new Date(d.ultima_vez).toLocaleString() : '—';
 
       let dotClass = 'dot-unknown';
@@ -392,10 +376,21 @@ async function cargarDispositivos() {
 
       const latStr = latencia !== null ? `${latencia.toFixed(0)}ms` : '—';
 
+      const asig = d.tipo_asignacion_ip || 'desconocido';
+      const asigColor = {dhcp:'#3b82f6', reservada:'#22c55e', estatica:'#f97316', desconocido:'#9ca3af'};
+      const ipColor = asigColor[asig] || '#9ca3af';
+
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td>${d.ip}</td>
+        <td style="color:${ipColor};font-weight:600;">${d.ip}</td>
+        <td style="font-weight:600;">${d.alias || '—'}</td>
         <td>${d.hostname || '—'}</td>
+        <td><select class="asig-select" data-id="${d.id}" style="font-size:11px;padding:2px 2px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);width:100%;min-width:80px;">
+          <option value="desconocido" ${asig==='desconocido'?'selected':''}>—</option>
+          <option value="dhcp" ${asig==='dhcp'?'selected':''}>DHCP</option>
+          <option value="reservada" ${asig==='reservada'?'selected':''}>Reservada</option>
+          <option value="estatica" ${asig==='estatica'?'selected':''}>Estática</option>
+        </select></td>
         <td style="font-size:10px;color:var(--muted);font-family:monospace;">${d.mac || '—'}</td>
         <td style="font-size:10px;color:var(--muted);">${d.fabricante || '—'}</td>
         <td><span class="tipo-tag">${d.tipo || 'desconocido'}</span></td>
@@ -404,6 +399,21 @@ async function cargarDispositivos() {
         <td>${ultima}</td>
         <td><button class="btn btn-sm" onclick="eliminarDispositivo(${d.id}, '${d.ip}')">🗑️</button> <button class="btn btn-sm" onclick="verServicios(${d.id}, '${d.ip}')">🔍</button> <button class="btn btn-sm" onclick="verCredenciales(${d.id}, '${d.ip}')">🔑</button></td>
       `;
+      const sel = tr.querySelector('.asig-select');
+      sel.addEventListener('change', async function() {
+        try {
+          await apiFetch('/api/dispositivos/' + this.dataset.id + '/asignacion-ip', {
+            method: 'PATCH',
+            body: JSON.stringify({tipo_asignacion_ip: this.value}),
+          });
+          const newColor = asigColor[this.value] || '#9ca3af';
+          tr.querySelector('td:first-child').style.color = newColor;
+          toast('Asignación actualizada');
+        } catch (e) {
+          this.value = asig;
+          toast('Error al actualizar');
+        }
+      });
       tbody.appendChild(tr);
     }
   } catch (e) { console.error('Dispositivos error:', e); }
@@ -692,26 +702,7 @@ async function verCredenciales(id, ip) {
   document.getElementById('inputObservacion').value = '';
   document.getElementById('serialGroupReadonly').style.display = 'none';
   document.getElementById('serialGroupManual').style.display = 'none';
-  try {
-    const data = await apiFetch(`/api/dispositivos/${id}/credenciales`);
-    if (data) {
-      if (data.serial) {
-        document.getElementById('spanSerial').textContent = data.serial;
-        document.getElementById('serialGroupReadonly').style.display = 'flex';
-      } else {
-        document.getElementById('serialGroupManual').style.display = 'flex';
-      }
-      document.getElementById('inputAlias').value = data.alias || '';
-      document.getElementById('inputAdminPass').value = data.admin_pass || '';
-      document.getElementById('inputUsuario').value = data.usuario || '';
-      document.getElementById('inputAppPass').value = data.app_pass || '';
-      document.getElementById('inputObservacion').value = data.observacion || '';
-    } else {
-      document.getElementById('serialGroupManual').style.display = 'flex';
-    }
-  } catch (_) {
-    document.getElementById('serialGroupManual').style.display = 'flex';
-  }
+  document.getElementById('serialGroupManual').style.display = 'flex';
   document.getElementById('modalCredenciales').classList.add('active');
 }
 
@@ -744,6 +735,7 @@ async function guardarCredenciales() {
       body: JSON.stringify(data),
     });
     cerrarModalCredenciales();
+    cargarDispositivos();
     toast('Credenciales guardadas');
   } catch (e) {
     toast('Error al guardar');

@@ -3,6 +3,7 @@ import logging
 import random
 import math
 from datetime import datetime, timedelta
+from pydantic import BaseModel
 from contextlib import asynccontextmanager
 import asyncio
 
@@ -10,13 +11,16 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from backend.database import init_db, get_session, get_db_path
 from backend.models import Base, Dispositivo, Ping, Alerta, Servicio, PosicionTopologia, Credencial
 from backend.schemas import (
-    DispositivoCreate, DispositivoOut, PingOut, ServicioOut, AlertaOut,
+    DispositivoCreate, DispositivoOut, DispositivoConEstado,
+    PingOut, ServicioOut, AlertaOut,
     ScanRequest, PosicionUpdate, StatsOut, CredencialCreate, CredencialOut,
+    ChatRequest, ClienteSwitch, NotificacionRequest,
 )
 from concurrent.futures import ThreadPoolExecutor
 import agente.nmap_scanner as nmap_scanner
@@ -24,7 +28,6 @@ from agente.icmp_poller import ciclo_polling
 from exportar.generar_reporte import generar as generar_reporte
 from backend.chat import preguntar
 from backend.notificaciones import notificar
-from backend.schemas import ChatRequest, ClienteSwitch, NotificacionRequest
 
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO"),
@@ -94,6 +97,59 @@ async def listar_dispositivos(activo: int | None = None, tipo: str | None = None
         session.close()
 
 
+@app.get("/api/dispositivos/con-estado", response_model=list[DispositivoConEstado])
+async def listar_dispositivos_con_estado():
+    session = _get_session()
+    try:
+        dispositivos = session.query(Dispositivo).all()
+        max_ids = (
+            session.query(
+                Ping.dispositivo_id,
+                func.max(Ping.id).label("max_id"),
+            )
+            .group_by(Ping.dispositivo_id)
+            .subquery()
+        )
+        ultimos = (
+            session.query(Ping)
+            .join(max_ids, Ping.id == max_ids.c.max_id)
+            .all()
+        )
+        ping_map = {p.dispositivo_id: p for p in ultimos}
+        cred_sub = (
+            session.query(
+                Credencial.dispositivo_id,
+                Credencial.alias,
+            )
+            .distinct(Credencial.dispositivo_id)
+            .subquery()
+        )
+        cred_map = {r.dispositivo_id: r.alias for r in session.query(cred_sub).all()}
+        return [
+            DispositivoConEstado(
+                id=d.id,
+                ip=d.ip,
+                hostname=d.hostname,
+                mac=d.mac,
+                fabricante=d.fabricante,
+                tipo=d.tipo,
+                descripcion=d.descripcion,
+                primera_vez=d.primera_vez,
+                ultima_vez=d.ultima_vez,
+                activo=d.activo,
+                segmento=d.segmento,
+                serial=d.serial,
+                estado=ping_map[d.id].estado if d.id in ping_map else "desconocido",
+                latencia_ms=ping_map[d.id].latencia_ms if d.id in ping_map else None,
+                alias=cred_map.get(d.id),
+                tipo_asignacion_ip=d.tipo_asignacion_ip or "desconocido",
+            )
+            for d in dispositivos
+        ]
+    finally:
+        session.close()
+
+
 @app.get("/api/segmentos")
 async def listar_segmentos():
     session = _get_session()
@@ -130,6 +186,24 @@ async def crear_dispositivo(data: DispositivoCreate):
         session.commit()
         session.refresh(d)
         return d
+    finally:
+        session.close()
+
+
+class AsignacionIpUpdate(BaseModel):
+    tipo_asignacion_ip: str
+
+
+@app.patch("/api/dispositivos/{dispositivo_id}/asignacion-ip")
+async def actualizar_asignacion_ip(dispositivo_id: int, data: AsignacionIpUpdate):
+    session = _get_session()
+    try:
+        d = session.get(Dispositivo, dispositivo_id)
+        if not d:
+            raise HTTPException(404, "Dispositivo no encontrado")
+        d.tipo_asignacion_ip = data.tipo_asignacion_ip
+        session.commit()
+        return {"ok": True}
     finally:
         session.close()
 
@@ -535,7 +609,11 @@ async def obtener_topologia():
                 estado = ultimo_ping.estado
                 latencia = ultimo_ping.latencia_ms
 
-            x, y = posiciones.get(d.id)
+            pos = posiciones.get(d.id)
+            if pos is None:
+                x = y = None
+            else:
+                x, y = pos
             if x is None:
                 angulo = (2 * math.pi * i) / max(len(dispositivos), 1)
                 radio = 250
@@ -556,7 +634,15 @@ async def obtener_topologia():
             })
 
         session.commit()
-        enlaces = [{"from": n["id"], "to": n["id"]} for n in nodos if False]
+        enlaces = []
+        segmentos = {}
+        for n in nodos:
+            seg = n.get("segmento")
+            if seg:
+                segmentos.setdefault(seg, []).append(n["id"])
+        for seg, ids in segmentos.items():
+            for i in range(len(ids) - 1):
+                enlaces.append({"from": ids[i], "to": ids[i + 1]})
         return {"nodos": nodos, "enlaces": enlaces}
     finally:
         session.close()
