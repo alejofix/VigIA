@@ -80,6 +80,7 @@ class StatsOut(BaseModel):
     degradados: int = 0
     caidos: int
     alertas_pendientes: int
+    total_pings: int = 0
 
 
 class ChatRequest(BaseModel):

@@ -102,6 +102,22 @@
   .container { max-width: 1200px; margin: 0 auto; padding: 20px 24px; position: relative; z-index: 2; }
   .container > .term-window + .term-window { margin-top: 20px; }
   .stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+  .stat-speed {
+    grid-column: 1 / -1;
+    background: rgba(12,12,22,0.85);
+    backdrop-filter: blur(6px);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    display: flex; align-items: center; gap: 16px;
+    font-size: 11px; min-height: 48px;
+  }
+  .stat-speed .val { color: var(--teal-lt); font-weight: 500; }
+  .stat-speed .label { color: var(--muted); font-size: 8px; text-transform: uppercase; letter-spacing: 0.08em; }
+  .stat-speed .sep { color: var(--border); }
+  .stat-speed .bar-wrap { flex:1; height:4px; background:var(--border); border-radius:2px; overflow:hidden; max-width:200px; }
+  .stat-speed .bar-fill { height:100%; width:0%; background:var(--teal); border-radius:2px; transition:width 0.3s; }
+  .stat-speed .btn-speed { margin-left:auto; flex-shrink:0; }
   .stat-card {
     background: rgba(12,12,22,0.85);
     backdrop-filter: blur(6px);
@@ -217,7 +233,7 @@
     <div class="logo">Vig<span>IA</span><span style="font-size:9px;color:var(--muted);margin-left:8px;letter-spacing:1px;font-weight:300;">// NETWORK MONITOR</span></div>
     <div class="header-right">
       <span class="badge" style="color:var(--green);border-color:rgba(0,204,119,0.15);">● SYS.ONLINE</span>
-      <span class="badge" id="clienteBadge" style="max-width:140px;overflow:hidden;text-overflow:ellipsis;" data-cliente="red_cliente">● red_cliente</span>
+      <span class="badge" id="clienteBadge" style="max-width:140px;overflow:hidden;text-overflow:ellipsis;" data-cliente="">● <span id="clienteNombre">—</span></span>
       <button class="btn" onclick="mostrarModalCliente()" style="font-size:9px;padding:2px 7px;">⌄ DB</button>
       <span class="badge" id="pollBadge">⏹ IDLE</span>
       <span class="badge" style="border-color:rgba(0,204,119,0.1);color:rgba(112,120,136,0.5);font-size:8px;">alejo_fix</span>
@@ -239,6 +255,23 @@
           <div class="stat-card" style="border-left-color:var(--degradado);"><div class="stat-num" id="numDegradados">0</div><div class="stat-label" style="color:var(--degradado);">Degradados</div></div>
           <div class="stat-card down"><div class="stat-num" id="numDown">0</div><div class="stat-label">Caidos</div></div>
           <div class="stat-card alertas"><div class="stat-num" id="numAlertas">0</div><div class="stat-label">Alertas</div></div>
+
+          <div class="stat-speed" id="speedBox">
+            <span style="color:var(--muted);font-size:10px;">🚀 Speedtest</span>
+            <span class="sep">|</span>
+            <span><span class="label">⬇</span> <span class="val" id="spDl">—</span></span>
+            <span><span class="label">⬆</span> <span class="val" id="spUl">—</span></span>
+            <span><span class="label">⏱</span> <span class="val" id="spPing">—</span></span>
+            <span class="sep">|</span>
+            <span style="font-size:9px;color:var(--muted);" id="spServer">—</span>
+            <span class="sep">|</span>
+            <span style="font-size:9px;color:var(--muted);" id="spIP">—</span>
+            <button class="btn" onclick="mostrarIPPublica()" style="font-size:9px;padding:2px 7px;flex-shrink:0;">🌐 IP</button>
+            <span class="sep">|</span>
+            <div class="bar-wrap"><div class="bar-fill" id="spBar"></div></div>
+            <button class="btn btn-speed" id="btnSpeedtest" onclick="speedtest()">🚀 Test</button>
+          </div>
+
         </div>
       </div>
     </div>
@@ -261,7 +294,8 @@
           <button class="btn" onclick="cargarDatos()">↻ Reload</button>
           <button class="btn" onclick="generarReporte('html')">📄 HTML</button>
           <button class="btn" onclick="generarReporte('txt')">📃 TXT</button>
-          <button class="btn" onclick="mostrarIPPublica()">🌐 IP</button>
+          <button class="btn" onclick="reconciliarRed()">♻ Reconciliar</button>
+          <button class="btn" onclick="borrarRed()" style="color:var(--down);border-color:rgba(232,72,72,0.2);">✖ Borrar Red</button>
           <a href="/mapa" class="btn" target="_blank">🗺 Map</a>
           <span class="contador" id="contador">—</span>
         </div>
@@ -397,6 +431,18 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="modalAdminKey">
+  <div class="modal">
+    <h3>🔐 Clave de seguridad</h3>
+    <p style="font-size:11px;color:var(--muted);margin-bottom:12px;">Ingresá la clave de admin para autorizar esta operación</p>
+    <input id="inputAdminKey" type="password" placeholder="Clave admin..." style="width:100%;margin-bottom:14px;">
+    <div class="modal-btns">
+      <button class="btn" onclick="cerrarModalAdminKey()">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarAdminKey()">Autorizar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 let pollIntervalId = null;
 let pollContador = 0;
@@ -465,6 +511,7 @@ async function cargarStats() {
     document.getElementById('numDegradados').textContent = s.degradados;
     document.getElementById('numDown').textContent = s.caidos;
     document.getElementById('numAlertas').textContent = s.alertas_pendientes;
+
     document.getElementById('ultimoPoll').textContent = new Date().toLocaleTimeString();
   } catch (e) { console.error('Stats error:', e); }
 }
@@ -576,6 +623,7 @@ async function cargarDatos() {
   document.body.classList.add('refreshing');
   const statusEl = document.getElementById('statusMsg');
   statusEl.textContent = 'cargando...';
+  await sincronizarCliente();
   try {
     await Promise.all([cargarStats(), cargarDispositivos(), cargarAlertas()]);
     statusEl.textContent = '';
@@ -587,7 +635,17 @@ async function cargarDatos() {
 }
 
 function clienteActivo() {
-  return document.getElementById('clienteBadge').dataset.cliente || 'red_cliente';
+  const el = document.getElementById('clienteBadge');
+  return el.dataset.cliente || 'red_cliente';
+}
+
+async function sincronizarCliente() {
+  try {
+    const res = await apiFetch('/api/clientes');
+    const activo = res.activo || 'red_cliente';
+    document.getElementById('clienteBadge').dataset.cliente = activo;
+    document.getElementById('clienteNombre').textContent = activo;
+  } catch (_) {}
 }
 
 async function generarReporte(formato) {
@@ -635,7 +693,7 @@ document.getElementById('chatInput').addEventListener('keydown', function(e) {
 function mostrarModalScan() {
   document.getElementById('modalScan').classList.add('active');
   document.getElementById('inputRango').value = '192.168.1.0/24';
-  document.getElementById('inputCliente').value = 'red_cliente';
+  document.getElementById('inputCliente').value = clienteActivo();
 }
 
 function cerrarModalScan() {
@@ -644,11 +702,11 @@ function cerrarModalScan() {
 
 async function iniciarScan() {
   const rango = document.getElementById('inputRango').value.trim();
-  const cliente = document.getElementById('inputCliente').value.trim() || 'red_cliente';
+  const cliente = document.getElementById('inputCliente').value.trim() || clienteActivo();
   if (!rango) { toast('Ingresa un rango IP'); return; }
   cerrarModalScan();
-  document.getElementById('clienteBadge').textContent = '● ' + cliente;
   document.getElementById('clienteBadge').dataset.cliente = cliente;
+  document.getElementById('clienteNombre').textContent = cliente;
   try {
     const res = await apiFetch('/api/scan', {
       method: 'POST',
@@ -721,8 +779,8 @@ async function cambiarCliente() {
       method: 'POST',
       body: JSON.stringify({ nombre_cliente: cliente }),
     });
-    document.getElementById('clienteBadge').textContent = '● ' + cliente;
     document.getElementById('clienteBadge').dataset.cliente = cliente;
+    document.getElementById('clienteNombre').textContent = cliente;
     toast('Cliente cambiado a: ' + cliente);
     cargarDatos();
   } catch (e) {
@@ -882,6 +940,116 @@ async function borrarAlertas() {
   } catch (e) {
     toast('Error al borrar alertas');
   }
+}
+
+async function speedtest() {
+  const btn = document.getElementById('btnSpeedtest');
+  const box = document.getElementById('speedBox');
+  btn.disabled = true;
+  btn.textContent = '⌛';
+  document.getElementById('spDl').textContent = '...';
+  document.getElementById('spUl').textContent = '...';
+  document.getElementById('spPing').textContent = '...';
+  document.getElementById('spServer').textContent = 'Midiendo...';
+  document.getElementById('spIP').textContent = '';
+  document.getElementById('spBar').style.width = '0%';
+  let pct = 0;
+  const anim = setInterval(() => {
+    pct = Math.min(pct + 8, 80);
+    document.getElementById('spBar').style.width = pct + '%';
+  }, 1000);
+  try {
+    const { task_id } = await apiFetch('/api/speedtest', { method: 'POST' });
+    const poll = setInterval(async () => {
+      try {
+        const res = await apiFetch('/api/speedtest/estado/' + task_id);
+        if (res.estado === 'completo') {
+          clearInterval(poll);
+          clearInterval(anim);
+          document.getElementById('spBar').style.width = '100%';
+          document.getElementById('spDl').textContent = res.download_mbps + ' Mbps';
+          document.getElementById('spUl').textContent = res.upload_mbps + ' Mbps';
+          document.getElementById('spPing').textContent = res.ping_ms + ' ms';
+          document.getElementById('spServer').textContent = res.servidor;
+          document.getElementById('spIP').textContent = res.ip_publica;
+          btn.textContent = '🚀 Test';
+          btn.disabled = false;
+          setTimeout(() => { document.getElementById('spBar').style.width = '0%'; }, 2000);
+        } else if (res.estado === 'error') {
+          clearInterval(poll);
+          clearInterval(anim);
+          document.getElementById('spServer').textContent = 'Error: ' + (res.error || 'desconocido');
+          document.getElementById('spBar').style.width = '0%';
+          btn.textContent = '🚀 Test';
+          btn.disabled = false;
+        }
+      } catch (_) { clearInterval(poll); clearInterval(anim); btn.textContent = '🚀 Test'; btn.disabled = false; }
+    }, 2000);
+  } catch (e) {
+    clearInterval(anim);
+    document.getElementById('spServer').textContent = 'Error: ' + e.message;
+    btn.textContent = '🚀 Test';
+    btn.disabled = false;
+  }
+}
+
+let _adminAccion = null;
+
+function mostrarModalAdminKey(accion) {
+  _adminAccion = accion;
+  document.getElementById('inputAdminKey').value = '';
+  document.getElementById('modalAdminKey').classList.add('active');
+  document.getElementById('inputAdminKey').focus();
+}
+
+function cerrarModalAdminKey() {
+  document.getElementById('modalAdminKey').classList.remove('active');
+  _adminAccion = null;
+}
+
+async function confirmarAdminKey() {
+  const clave = document.getElementById('inputAdminKey').value.trim();
+  if (!clave) return;
+  cerrarModalAdminKey();
+  if (_adminAccion === 'reconciliar') await ejecutarReconciliacion(clave);
+  else if (_adminAccion === 'borrar') await ejecutarBorrado(clave);
+  _adminAccion = null;
+}
+
+async function ejecutarReconciliacion(clave) {
+  try {
+    const res = await apiFetch('/api/reconciliar', {
+      method: 'POST',
+      headers: { 'X-Admin-Key': clave },
+    });
+    toast(`Reconciliación completa: ${res.corregidos_tipo} tipos, ${res.corregidos_fab} fabricantes corregidos`);
+    cargarDatos();
+  } catch (e) {
+    toast('Error: ' + (e.message.includes('403') ? 'Clave incorrecta' : e.message));
+  }
+}
+
+async function ejecutarBorrado(clave) {
+  if (!confirm('¿BORRAR TODA LA RED? Se eliminarán todos los dispositivos, pings, alertas y servicios. Esta acción NO se puede deshacer.')) return;
+  if (!confirm('¿Estás SEGURO? Esta es tu última oportunidad antes de borrar todo.')) return;
+  try {
+    const res = await apiFetch('/api/red', {
+      method: 'DELETE',
+      headers: { 'X-Admin-Key': clave },
+    });
+    toast(res.mensaje);
+    cargarDatos();
+  } catch (e) {
+    toast('Error: ' + (e.message.includes('403') ? 'Clave incorrecta' : e.message));
+  }
+}
+
+function reconciliarRed() {
+  mostrarModalAdminKey('reconciliar');
+}
+
+function borrarRed() {
+  mostrarModalAdminKey('borrar');
 }
 
 // ── Canvas: electromagnetic waves ──

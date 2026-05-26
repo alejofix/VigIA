@@ -15,7 +15,7 @@ logger = logging.getLogger("vigia.reporte")
 REPORTES_DIR = "reportes"
 
 
-def _colectar_datos(session: Session) -> dict:
+def _colectar_datos(session: Session, nombre_cliente: str = "") -> dict:
     dispositivos = session.query(Dispositivo).order_by(Dispositivo.ip).all()
 
     total = len(dispositivos)
@@ -96,7 +96,7 @@ def _colectar_datos(session: Session) -> dict:
     })
 
     return {
-        "cliente": "",
+        "cliente": nombre_cliente,
         "fecha": datetime.now().strftime("%Y-%m-%d %H:%M"),
         "tecnico": "",
         "total_dispositivos": total,
@@ -117,8 +117,7 @@ def generar_html(nombre_cliente: str) -> str:
     session = get_session(db_path)()
 
     try:
-        datos = _colectar_datos(session)
-        datos["cliente"] = nombre_cliente
+        datos = _colectar_datos(session, nombre_cliente)
 
         template_dir = Path(__file__).resolve().parent.parent / "frontend"
         env = Environment(loader=FileSystemLoader(str(template_dir)))
@@ -146,7 +145,7 @@ def generar_txt(nombre_cliente: str) -> str:
     session = get_session(db_path)()
 
     try:
-        datos = _colectar_datos(session)
+        datos = _colectar_datos(session, nombre_cliente)
         lineas = []
         lineas.append("=" * 60)
         lineas.append(f"  VigIA - Reporte de Red")

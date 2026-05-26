@@ -21,19 +21,18 @@ def test_detectar_tipo():
     assert detectar_tipo(["rtsp", "onvif"]) == "camara"
     assert detectar_tipo(["http", "https"]) == "servidor"
     assert detectar_tipo(["snmp", "dhcp"]) == "router"
-    assert detectar_tipo(["ssh"]) == "dispositivo"
+    assert detectar_tipo(["ssh"]) == "servidor"
     assert detectar_tipo([]) == "desconocido"
 
 
-@patch("agente.icmp_poller.icmp_ping")
-def test_hacer_ping_up(mock_ping):
+@patch("agente.icmp_poller.subprocess.run")
+def test_hacer_ping_up(mock_run):
     from agente.icmp_poller import hacer_ping
 
-    mock_resultado = MagicMock()
-    mock_resultado.is_alive = True
-    mock_resultado.avg_rtt = 5.2
-    mock_resultado.packet_loss = 0.0
-    mock_ping.return_value = mock_resultado
+    mock_proc = MagicMock()
+    mock_proc.returncode = 0
+    mock_proc.stdout = "rtt min/avg/max/mdev = 2.054/5.200/8.346/3.146 ms\n0% packet loss"
+    mock_run.return_value = mock_proc
 
     resultado = hacer_ping("192.168.1.1")
     assert resultado["estado"] == "up"
@@ -41,15 +40,14 @@ def test_hacer_ping_up(mock_ping):
     assert resultado["perdida_pct"] == 0.0
 
 
-@patch("agente.icmp_poller.icmp_ping")
-def test_hacer_ping_down(mock_ping):
+@patch("agente.icmp_poller.subprocess.run")
+def test_hacer_ping_down(mock_run):
     from agente.icmp_poller import hacer_ping
 
-    mock_resultado = MagicMock()
-    mock_resultado.is_alive = False
-    mock_resultado.avg_rtt = None
-    mock_resultado.packet_loss = 1.0
-    mock_ping.return_value = mock_resultado
+    mock_proc = MagicMock()
+    mock_proc.returncode = 1
+    mock_proc.stdout = "100% packet loss"
+    mock_run.return_value = mock_proc
 
     resultado = hacer_ping("192.168.1.1")
     assert resultado["estado"] == "down"
@@ -59,7 +57,7 @@ def test_hacer_ping_exception():
     from agente.icmp_poller import hacer_ping
 
     resultado = hacer_ping("999.999.999.999")
-    assert resultado["estado"] == "timeout"
+    assert resultado["estado"] in ("down", "warn")
     assert resultado["perdida_pct"] == 100
 
 

@@ -216,12 +216,19 @@ VENDOR_OUI = {
     "3C:07:54": "Dahua",
     "E0:3C:E6": "Dahua",
     "9C:EB:E8": "Dahua",
+    "A0:BD:1D": "Dahua",
     "00:08:5D": "Hikvision",
     "00:9A:CD": "Hikvision",
     "10:1B:54": "Hikvision",
     "44:6C:42": "Hikvision",
     "48:A2:E6": "Hikvision",
+    "50:E5:38": "Hikvision",
+    "80:7C:62": "Hikvision",
+    "90:6A:94": "Hikvision",
     "A4:30:67": "Hikvision",
+    "AC:B9:2F": "Hikvision",
+    "1C:4D:89": "Hikvision",
+    "8C:05:28": "Hikvision",
     "0C:C4:7A": "Uniview",
     "4C:9E:80": "Uniview",
     "7C:2E:0C": "Uniview",
@@ -551,14 +558,14 @@ def _es_mac_aleatoria(mac: str) -> bool:
 def detectar_fabricante(mac: str, vendor_nmap: str = "", hostname: str = "") -> str:
     if vendor_nmap and vendor_nmap.strip():
         return vendor_nmap.strip()
-    prefix = mac.upper()[:8] if mac else ""
-    if prefix in VENDOR_OUI:
-        return VENDOR_OUI[prefix]
     if hostname:
         h = hostname.strip()
         for patron, marca in HOSTNAME_FABRICANTE:
             if h.startswith(patron) or patron in h:
                 return marca
+    prefix = mac.upper()[:8] if mac else ""
+    if prefix in VENDOR_OUI:
+        return VENDOR_OUI[prefix]
     if mac and mac != "00:00:00:00:00:00":
         if _es_mac_aleatoria(mac):
             return ""
@@ -592,7 +599,8 @@ SERVICIO_A_TIPO = {
 }
 
 
-PRIORIDAD_TIPO = {"camara": 5, "impresora": 4, "servidor": 3, "router": 2, "computadora": 1, "dispositivo": 0, "desconocido": -1}
+PRIORIDAD_TIPO = {"router": 5, "camara": 5, "computadora": 4, "impresora": 4, "servidor": 3, "dispositivo": 1, "desconocido": 0}
+PC_BRANDS = {"Lenovo", "Dell", "HP", "Asus", "Acer", "Apple", "Microsoft"}
 
 
 def detectar_tipo(servicios: list) -> str:
@@ -624,8 +632,10 @@ def detectar_tipo_por_hostname(hostname: str) -> str:
         return "impresora"
     if "server" in h or "servidor" in h or "nas" in h or "synology" in h or "qnap" in h:
         return "servidor"
-    if "laptop" in h or "notebook" in h or "desktop" in h or "pc-" in h:
+    if "thinkpad" in h or "ideapad" in h or "laptop" in h or "notebook" in h or "desktop" in h or "pc-" in h or "workstation" in h:
         return "computadora"
+    if "nvr" in h or "dvr" in h:
+        return "camara"
     return ""
 
 
@@ -682,7 +692,7 @@ def _agregar_o_actualizar(session, ip, hostname, mac, fabricante, tipo, servicio
         existente.mac = mac or existente.mac
         existente.fabricante = fabricante or existente.fabricante
         if tipo:
-            prioridad = {"camara": 5, "impresora": 4, "servidor": 3, "router": 2, "computadora": 1, "dispositivo": 0, "desconocido": -1}
+            prioridad = {"router": 5, "camara": 5, "computadora": 4, "impresora": 4, "servidor": 3, "dispositivo": 1, "desconocido": 0}
             if prioridad.get(tipo, 0) >= prioridad.get(existente.tipo or "", 0):
                 existente.tipo = tipo
         existente.segmento = existente.segmento or segmento_ip
@@ -839,10 +849,9 @@ def escanear(rango_ip: str, nombre_cliente: str, timeout: int = 300) -> dict:
                             servicios_detectados.append(servicio_nombre)
 
             tipo = detectar_tipo(servicios_detectados)
-            if tipo in ("dispositivo", "desconocido", ""):
-                tipo_hostname = detectar_tipo_por_hostname(hostname)
-                if tipo_hostname and PRIORIDAD_TIPO.get(tipo_hostname, 0) > PRIORIDAD_TIPO.get(tipo, -1):
-                    tipo = tipo_hostname
+            tipo_hostname = detectar_tipo_por_hostname(hostname)
+            if tipo_hostname and PRIORIDAD_TIPO.get(tipo_hostname, 0) > PRIORIDAD_TIPO.get(tipo, -1):
+                tipo = tipo_hostname
 
             info_snmp = obtener_info_dispositivo(ip, community="public")
             if info_snmp and info_snmp["snmp_disponible"]:
@@ -881,3 +890,64 @@ def escanear(rango_ip: str, nombre_cliente: str, timeout: int = 300) -> dict:
         raise
     finally:
         session.close()
+
+
+def reconciliar_dispositivos(session: Session) -> dict:
+    """Re-evalúa tipo y fabricante de todos los dispositivos activos
+    usando hostname + servicios + MAC. Corre automático en cada ciclo
+    de polling y al iniciar la app."""
+    dispositivos = session.query(Dispositivo).filter_by(activo=1).all()
+    corregidos_tipo = 0
+    corregidos_fab = 0
+    for d in dispositivos:
+        cambios = False
+        # Re-evaluar tipo: hostname tiene prioridad, servicios como fallback
+        tipo_actual = d.tipo or ""
+        tipo_hostname = detectar_tipo_por_hostname(d.hostname or "")
+        servicios_db = session.query(Servicio).filter_by(dispositivo_id=d.id).all()
+        nombres_servicios = list({s.servicio for s in servicios_db if s.servicio and s.estado == "abierto"})
+        tipo_servicios = detectar_tipo(nombres_servicios)
+        # Elegir el de mayor prioridad
+        mejor_tipo = ""
+        for cand in [tipo_hostname, tipo_servicios]:
+            if cand and PRIORIDAD_TIPO.get(cand, 0) > PRIORIDAD_TIPO.get(mejor_tipo, -1):
+                mejor_tipo = cand
+        if mejor_tipo and PRIORIDAD_TIPO.get(mejor_tipo, 0) > PRIORIDAD_TIPO.get(tipo_actual, -1):
+            d.tipo = mejor_tipo
+            corregidos_tipo += 1
+            cambios = True
+        # Re-evaluar fabricante
+        fab_actual = d.fabricante or ""
+        if d.mac:
+            nuevo_fab = detectar_fabricante(d.mac, hostname=d.hostname or "")
+            if nuevo_fab:
+                if not fab_actual:
+                    d.fabricante = nuevo_fab
+                    corregidos_fab += 1
+                    cambios = True
+                elif nuevo_fab != "desconocido":
+                    if fab_actual == "desconocido" or (
+                        d.hostname and any(
+                            p in d.hostname for p, _ in [
+                                ("ThinkPad", "Lenovo"), ("IdeaPad", "Lenovo"),
+                                ("DESKTOP-", "Windows PC"), ("LAPTOP-", "Windows Laptop"),
+                                ("iPhone", "Apple"), ("SM-", "Samsung"),
+                            ]
+                        )
+                    ):
+                        d.fabricante = nuevo_fab
+                        corregidos_fab += 1
+                        cambios = True
+        # Si el fabricante es una marca de PC y el tipo es "camara",
+        # probablemente es un PC con RTSP abierto, no una cámara real
+        if d.tipo == "camara" and d.fabricante in PC_BRANDS:
+            d.tipo = "servidor"
+            corregidos_tipo += 1
+            cambios = True
+            logger.warning(f"Reclasificado {d.ip} de camara→servidor (fabricante={d.fabricante} es PC)")
+        if cambios:
+            logger.info(f"Reconciliado {d.ip}: tipo={d.tipo}, fabricante={d.fabricante}")
+    if corregidos_tipo or corregidos_fab:
+        session.commit()
+        logger.info(f"Reconciliación: {corregidos_tipo} tipos, {corregidos_fab} fabricantes corregidos")
+    return {"corregidos_tipo": corregidos_tipo, "corregidos_fab": corregidos_fab}

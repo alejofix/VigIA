@@ -200,7 +200,7 @@
 <div class="header">
   <div class="logo">Vig<span>IA</span><span style="font-size:9px;color:var(--muted);margin-left:8px;letter-spacing:1px;font-weight:300;">// TOPOLOGY</span></div>
   <div class="header-right">
-    <span class="badge" id="clienteBadge">red_cliente</span>
+    <span class="badge" id="clienteBadge" data-cliente="">● <span id="clienteNombre">—</span></span>
     <span class="badge" id="pollBadge">⏹ IDLE</span>
     <span class="badge" style="border-color:rgba(0,204,119,0.1);color:rgba(112,120,136,0.5);font-size:8px;">alejo_fix</span>
     <a href="/" class="btn">⬅ Dash</a>
@@ -261,6 +261,7 @@
       <div class="term-window" style="display:flex;align-items:center;gap:4px;padding:2px 6px;">
         <button class="btn btn-primary" id="btnPoll" onclick="togglePoll()" style="font-size:9px;padding:2px 8px;">▶ Monitor</button>
         <button class="btn" onclick="cargarTopologia()" style="font-size:9px;padding:2px 6px;">↻</button>
+        <button class="btn" onclick="reconciliarRed()" style="font-size:9px;padding:2px 6px;">♻ Sync</button>
         <button class="btn" onclick="autoAcomodar()" style="font-size:9px;padding:2px 6px;">⊞ Lay</button>
         <button class="btn" onclick="cambiarLayout()" style="font-size:9px;padding:2px 6px;">⟁ Switch</button>
         <span class="count" id="contador" style="margin-left:4px;">—</span>
@@ -340,6 +341,15 @@
 var API_BASE = '';
 if (window.location.port === '' || window.location.port === '80' || window.location.port === '443') {
   API_BASE = 'http://localhost:8080';
+}
+
+async function sincronizarCliente() {
+  try {
+    var res = await apiFetch('/api/clientes');
+    var activo = res.activo || 'red_cliente';
+    document.getElementById('clienteBadge').dataset.cliente = activo;
+    document.getElementById('clienteNombre').textContent = activo;
+  } catch (_) {}
 }
 
 var network = null, nodes = null, edges = null;
@@ -461,6 +471,7 @@ function sizeFromTipo(tipo) {
 
 // ── Load topology ──
 async function cargarTopologia() {
+  await sincronizarCliente();
   try {
     var data = await apiFetch('/api/topologia');
     nodosData = data.nodos || [];
@@ -837,6 +848,68 @@ function togglePoll() {
     }, 10000);
     document.getElementById('contador').textContent = '⏱ 0s';
   }
+}
+
+// ── Speedtest ──
+function speedtestM() {
+  var btn = document.getElementById('btnSpeedtestM');
+  var sp = document.getElementById('spResultM');
+  btn.disabled = true;
+  btn.textContent = '⌛';
+  sp.style.display = 'inline';
+  sp.textContent = '⌛ Midiendo...';
+  apiFetch('/api/speedtest', { method: 'POST' }).then(function(data) {
+    var poll = setInterval(function() {
+      apiFetch('/api/speedtest/estado/' + data.task_id).then(function(res) {
+        if (res.estado === 'completo') {
+          clearInterval(poll);
+          sp.innerHTML = '⬇ ' + res.download_mbps + ' <span style=\"color:var(--muted);\">|</span> ⬆ ' + res.upload_mbps + ' <span style=\"color:var(--muted);\">|</span> ⏱ ' + res.ping_ms + ' ms <span style=\"color:var(--muted);font-size:8px;\">' + res.servidor + '</span>';
+          btn.textContent = '🚀 Speed';
+          btn.disabled = false;
+        } else if (res.estado === 'error') {
+          clearInterval(poll);
+          sp.textContent = '⚠ Error: ' + (res.error || 'desconocido');
+          btn.textContent = '🚀 Speed';
+          btn.disabled = false;
+        }
+      }).catch(function() { clearInterval(poll); sp.textContent = ''; sp.style.display = 'none'; btn.textContent = '🚀 Speed'; btn.disabled = false; });
+    }, 2000);
+  }).catch(function(e) {
+    sp.textContent = '⚠ Error: ' + e.message;
+    btn.textContent = '🚀 Speed';
+    btn.disabled = false;
+  });
+}
+
+// ── Reconciliation / Reset ──
+function reconciliarRed() {
+  var clave = prompt('🔐 Ingresá la clave de admin para reconciliar:');
+  if (!clave) return;
+  apiFetch('/api/reconciliar', {
+    method: 'POST',
+    headers: { 'X-Admin-Key': clave },
+  }).then(function(res) {
+    alert('Reconciliación completa: ' + res.corregidos_tipo + ' tipos, ' + res.corregidos_fab + ' fabricantes corregidos');
+    cargarTopologia();
+  }).catch(function(e) {
+    alert(e.message.includes('403') ? 'Clave incorrecta' : 'Error: ' + e.message);
+  });
+}
+
+function borrarRedM() {
+  if (!confirm('¿BORRAR TODA LA RED? Se eliminarán todos los dispositivos. Esta acción NO se puede deshacer.')) return;
+  if (!confirm('¿Estás SEGURO? Última oportunidad.')) return;
+  var clave = prompt('🔐 Ingresá la clave de admin para borrar la red:');
+  if (!clave) return;
+  apiFetch('/api/red', {
+    method: 'DELETE',
+    headers: { 'X-Admin-Key': clave },
+  }).then(function(res) {
+    alert(res.mensaje);
+    cargarTopologia();
+  }).catch(function(e) {
+    alert(e.message.includes('403') ? 'Clave incorrecta' : 'Error: ' + e.message);
+  });
 }
 
 // ── Init ──

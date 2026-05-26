@@ -7,12 +7,14 @@ from pydantic import BaseModel
 from contextlib import asynccontextmanager
 import asyncio
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+import speedtest as st_lib
+import uuid
 
 from backend.database import init_db, get_session, get_db_path
 from backend.models import Base, Dispositivo, Ping, Alerta, Servicio, PosicionTopologia, Credencial
@@ -24,6 +26,7 @@ from backend.schemas import (
 )
 from concurrent.futures import ThreadPoolExecutor
 import agente.nmap_scanner as nmap_scanner
+from agente.nmap_scanner import reconciliar_dispositivos
 from agente.icmp_poller import ciclo_polling
 from exportar.generar_reporte import generar as generar_reporte
 from backend.chat import preguntar
@@ -38,12 +41,21 @@ logger = logging.getLogger("vigia.api")
 DB_ACTIVA = "data/red_cliente.db"
 _executor = ThreadPoolExecutor(max_workers=2)
 _scan_tasks = {}
+_speedtest_tasks = {}
+ADMIN_KEY = "qwerty"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     os.makedirs("data", exist_ok=True)
     init_db(DB_ACTIVA)
+    try:
+        session = _get_session()
+        reconciliar_dispositivos(session)
+        session.close()
+        logger.info("Reconciliación inicial completada")
+    except Exception as e:
+        logger.warning(f"Reconciliación inicial omitida: {e}")
     yield
 
 
@@ -361,6 +373,7 @@ async def stats():
         warn = session.query(Alerta).filter(Alerta.tipo == "latencia_alta", Alerta.resuelta == 0).count()
         degradados = session.query(Alerta).filter(Alerta.tipo == "degradado", Alerta.resuelta == 0).count()
         caidos = session.query(Alerta).filter(Alerta.tipo == "caida", Alerta.resuelta == 0).count()
+        total_pings = session.query(Ping).count()
         return StatsOut(
             total_dispositivos=total,
             activos=activos,
@@ -368,6 +381,7 @@ async def stats():
             degradados=degradados,
             caidos=caidos,
             alertas_pendientes=alertas_pend,
+            total_pings=total_pings,
         )
     finally:
         session.close()
@@ -507,6 +521,83 @@ async def seed_data(nombre_cliente: str = "demo"):
         raise HTTPException(500, f"Error: {str(e)}")
     finally:
         session.close()
+
+
+@app.post("/api/reconciliar")
+async def reconciliar_red(x_admin_key: str = Header(None)):
+    if x_admin_key != ADMIN_KEY:
+        raise HTTPException(403, "Clave de seguridad inválida")
+    session = _get_session()
+    try:
+        res = reconciliar_dispositivos(session)
+        return {"ok": True, "corregidos_tipo": res["corregidos_tipo"], "corregidos_fab": res["corregidos_fab"]}
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Error en reconciliación: {e}")
+        raise HTTPException(500, f"Error: {str(e)}")
+    finally:
+        session.close()
+
+
+@app.delete("/api/red")
+async def borrar_red(x_admin_key: str = Header(None)):
+    if x_admin_key != ADMIN_KEY:
+        raise HTTPException(403, "Clave de seguridad inválida")
+    session = _get_session()
+    db_path = DB_ACTIVA
+    try:
+        session.query(PosicionTopologia).delete()
+        session.query(Credencial).delete()
+        session.query(Alerta).delete()
+        session.query(Ping).delete()
+        session.query(Servicio).delete()
+        session.query(Dispositivo).delete()
+        session.commit()
+        session.close()
+        if os.path.exists(db_path):
+            os.remove(db_path)
+            logger.warning(f"Archivo eliminado: {db_path}")
+        return {"ok": True, "mensaje": "Red eliminada completamente"}
+    except Exception as e:
+        session.rollback()
+        session.close()
+        logger.error(f"Error borrando red: {e}")
+        raise HTTPException(500, f"Error: {str(e)}")
+
+
+def _ejecutar_speedtest(task_id: str):
+    try:
+        st = st_lib.Speedtest()
+        st.get_best_server()
+        st.download()
+        st.upload()
+        res = st.results.dict()
+        _speedtest_tasks[task_id] = {
+            "estado": "completo",
+            "download_mbps": round(res.get("download", 0) / 1_000_000, 2),
+            "upload_mbps": round(res.get("upload", 0) / 1_000_000, 2),
+            "ping_ms": round(res.get("ping", 0), 1),
+            "servidor": f'{res.get("server", {}).get("sponsor", "?")} ({res.get("server", {}).get("name", "?")})',
+            "ip_publica": res.get("client", {}).get("ip", "?"),
+        }
+    except Exception as e:
+        _speedtest_tasks[task_id] = {"estado": "error", "error": str(e)}
+
+
+@app.post("/api/speedtest")
+async def iniciar_speedtest():
+    task_id = str(uuid.uuid4())
+    _speedtest_tasks[task_id] = {"estado": "en_progreso"}
+    _executor.submit(_ejecutar_speedtest, task_id)
+    return {"task_id": task_id}
+
+
+@app.get("/api/speedtest/estado/{task_id}")
+async def estado_speedtest(task_id: str):
+    data = _speedtest_tasks.get(task_id)
+    if not data:
+        raise HTTPException(404, "Task no encontrada")
+    return data
 
 
 @app.post("/api/scan/cancelar")

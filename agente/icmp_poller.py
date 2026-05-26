@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from backend.models import Dispositivo, Ping, Alerta
 from backend.database import get_session, init_db
 from backend.notificaciones import notificar
+from agente.nmap_scanner import reconciliar_dispositivos
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -186,6 +187,11 @@ def ciclo_polling(nombre_cliente: str, intervalo: int = POLL_INTERVAL):
     session: Session = session_factory()
 
     try:
+        try:
+            reconciliar_dispositivos(session)
+        except Exception as e:
+            logger.warning(f"Reconciliación falló (continúa polling): {e}")
+            session.rollback()
         _descubrir_por_arp(session)
         dispositivos = session.query(Dispositivo).filter_by(activo=1).all()
         if not dispositivos:
