@@ -217,7 +217,7 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
     <span class="badge" id="clienteBadge" data-cliente="">● <span id="clienteNombre">—</span></span>
     <span class="badge" id="pollBadge">⏹ IDLE</span>
     <span class="badge" style="border-color:rgba(0,204,119,0.1);color:rgba(112,120,136,0.5);font-size:8px;">alejo_fix</span>
-    <a href="/" class="btn">⬅ Dash</a>
+    <a id="dashLink" href="#" class="btn">⬅ Dash</a>
   </div>
 </div>
 
@@ -968,6 +968,13 @@ function borrarRedM() {
 
 <div id="errorMsg"></div>
 <script>
+// ── Dash link ──
+var _dl = document.getElementById('dashLink');
+if (_dl) {
+  if (MODO_XAMPP) _dl.href = 'index.html';
+  else _dl.href = '/';
+}
+
 // ── Init ──
 (function(){
   try {

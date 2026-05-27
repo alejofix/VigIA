@@ -952,6 +952,10 @@ def escanear(rango_ip: str, nombre_cliente: str, timeout: int = 300) -> dict:
             info = hosts_info_dict.get(ip, {})
             mac = info.get("mac", "") or _mac_arp(ip) or _mac_local(ip)
             fabricante = info.get("fabricante", "") or detectar_fabricante(mac, info.get("vendor", ""))
+            if not fabricante and mac:
+                vr = resolve_vendor(mac)
+                if vr and vr.get("vendor"):
+                    fabricante = vr["vendor"]
             tipo_inicial = "dispositivo" if not session.query(Dispositivo).filter_by(ip=ip, cliente_id=cid).first() else ""
             hr = resolve_hostname(ip) if tipo_inicial else None
             disp, upd = _agregar_o_actualizar(
