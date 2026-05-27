@@ -26,8 +26,9 @@ from backend.schemas import (
 )
 from concurrent.futures import ThreadPoolExecutor
 import agente.nmap_scanner as nmap_scanner
-from agente.nmap_scanner import reconciliar_dispositivos, descubrir_nuevos
+from agente.nmap_scanner import reconciliar_dispositivos, descubrir_nuevos, _SNMP_DISPONIBLE
 from agente.icmp_poller import ciclo_polling
+from agente.snmp_reader import obtener_info_dispositivo
 from exportar.generar_reporte import generar as generar_reporte
 from backend.chat import preguntar
 from backend.notificaciones import notificar
@@ -413,6 +414,44 @@ async def guardar_credenciales(
         session.close()
 
 
+@app.post("/api/dispositivos/{dispositivo_id}/re-detectar-serial")
+async def re_detectar_serial(
+    dispositivo_id: int,
+    nombre_cliente: str = Query("red_cliente"),
+):
+    session = get_session()
+    try:
+        cid = get_or_create_cliente(session, nombre_cliente)
+        disp = (
+            session.query(Dispositivo)
+            .filter_by(id=dispositivo_id, cliente_id=cid)
+            .first()
+        )
+        if not disp:
+            raise HTTPException(404, "Dispositivo no encontrado")
+
+        if not _SNMP_DISPONIBLE:
+            raise HTTPException(400, "SNMP no disponible en este sistema")
+
+        for community in ["public", "private", "snmp", "default", "internal", "monitor", "read", "admin", "secret", "ciscoworks", "cisco", "hponline", "manager"]:
+            info = obtener_info_dispositivo(disp.ip, community=community)
+            if info and info["snmp_disponible"]:
+                serial = info.get("serial")
+                if serial:
+                    disp.serial = serial
+                    session.commit()
+                    return {"ok": True, "serial": serial, "community": community}
+                return {"ok": True, "serial": None, "community": community, "mensaje": "SNMP disponible pero no se encontró serial"}
+        return {"ok": True, "serial": None, "mensaje": "No se pudo conectar por SNMP con ninguna community"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(500, f"Error re-detectando serial: {str(e)}")
+    finally:
+        session.close()
+
+
 @app.post("/api/dispositivos/{dispositivo_id}/escanear-puertos")
 async def escanear_puertos_dispositivo(
     dispositivo_id: int,
@@ -716,7 +755,14 @@ async def reconciliar_red(
     try:
         cid = get_or_create_cliente(session, nombre_cliente)
         res = reconciliar_dispositivos(session, cid)
-        return {"ok": True, "corregidos_tipo": res["corregidos_tipo"], "corregidos_fab": res["corregidos_fab"]}
+        return {
+            "ok": True,
+            "corregidos_tipo": res["corregidos_tipo"],
+            "corregidos_fab": res["corregidos_fab"],
+            "api_resueltos": res.get("api_resueltos", 0),
+            "port_resueltos": res.get("port_resueltos", 0),
+            "hostnames_resueltos": res.get("hostnames_resueltos", 0),
+        }
     except Exception as e:
         session.rollback()
         logger.error(f"Error en reconciliación: {e}")
@@ -813,7 +859,13 @@ async def poll_manual(nombre_cliente: str = "red_cliente"):
 async def listar_clientes():
     session = get_session()
     try:
-        clientes = session.query(Cliente).order_by(Cliente.nombre).all()
+        clientes = (
+            session.query(Cliente)
+            .outerjoin(Dispositivo, Dispositivo.cliente_id == Cliente.id)
+            .group_by(Cliente.id)
+            .order_by(func.count(Dispositivo.id).desc())
+            .all()
+        )
         return {"clientes": [c.nombre for c in clientes]}
     finally:
         session.close()
@@ -991,4 +1043,5 @@ async def guardar_posiciones(
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("backend.main:app", host="0.0.0.0", port=8080, reload=True)
+    port = int(os.getenv("PORT", "8080"))
+    uvicorn.run("backend.main:app", host="0.0.0.0", port=port, reload=True)

@@ -28,7 +28,8 @@ fi
 echo "[*] Iniciando backend (con reinicio automatico)..."
 while true; do
     echo "[*] $(date) - Iniciando servidor..."
-    uvicorn backend.main:app --host 0.0.0.0 --port 8080
+    PORT=${PORT:-8080}
+    uvicorn backend.main:app --host 0.0.0.0 --port "$PORT"
     echo "[!] $(date) - Servidor caido. Reiniciando en 2 segundos..."
     sleep 2
 done

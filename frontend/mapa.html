@@ -4,8 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VigIA — Mapa Topológico</title>
-<script src="http://localhost:8080/static/vendor/vis-network.min.js"></script>
-    <link href="http://localhost:8080/static/vendor/vis-network.min.css" rel="stylesheet">
+<script>
+// === CONFIGURACIÓN ===
+// MODO_XAMPP = true:  frontend servido por Apache (XAMPP), backend Python en PUERTO_BACKEND
+// MODO_XAMPP = false: backend Python sirve todo (puerto 8080)
+var MODO_XAMPP = true;
+var PUERTO_BACKEND = 8080;
+// =====================
+
+var API_BASE = '';
+if (MODO_XAMPP) {
+  API_BASE = 'http://localhost:' + PUERTO_BACKEND;
+}
+var _sb = MODO_XAMPP ? (location.protocol + '//' + location.host + '/VigIA/frontend') : (API_BASE + '/static');
+document.write('<script src="' + _sb + '/vendor/vis-network.min.js"><\/script>');
+document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesheet">');
+</script>
 <style>
   :root {
     --bg:        #0a0a0f;
@@ -338,11 +352,6 @@
 </div>
 
 <script>
-var API_BASE = '';
-if (window.location.port === '' || window.location.port === '80' || window.location.port === '443') {
-  API_BASE = 'http://localhost:8080';
-}
-
 async function sincronizarCliente() {
   try {
     var res = await apiFetch('/api/clientes', { sinCliente: true });
@@ -955,8 +964,10 @@ function borrarRedM() {
     alert(e.message.includes('403') ? 'Clave incorrecta' : 'Error: ' + e.message);
   });
 }
+</script>
 
 <div id="errorMsg"></div>
+<script>
 // ── Init ──
 (function(){
   try {

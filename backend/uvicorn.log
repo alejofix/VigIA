@@ -1,0 +1,30 @@
+INFO:     Started server process [49740]
+INFO:     Waiting for application startup.
+2026-05-27 11:01:08,738 [vigia.database] INFO: Tablas creadas/verificadas en MariaDB
+2026-05-27 11:01:08,805 [vigia.api] INFO: Reconciliación inicial completada
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
+INFO:     127.0.0.1:60222 - "OPTIONS /api/clientes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60236 - "GET /api/clientes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60236 - "GET /api/clientes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60236 - "OPTIONS /api/stats?nombre_cliente=trekker_net HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60222 - "OPTIONS /api/dispositivos/con-estado?nombre_cliente=trekker_net HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60244 - "OPTIONS /api/alertas?resuelta=0&nombre_cliente=trekker_net HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60236 - "GET /api/dispositivos/con-estado?nombre_cliente=trekker_net HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60252 - "GET /api/stats?nombre_cliente=trekker_net HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60222 - "GET /api/alertas?resuelta=0&nombre_cliente=trekker_net HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60222 - "OPTIONS /api/poll?nombre_cliente=trekker_net HTTP/1.1" 200 OK
+2026-05-27 11:01:10,204 [vigia.database] INFO: Tablas creadas/verificadas en MariaDB
+2026-05-27 11:01:10,215 [vigia.icmp_poller] INFO: Polling ICMP: 12 dispositivos
+2026-05-27 11:01:21,776 [vigia.icmp_poller] WARNING: ALERTA: 192.168.1.137 paso a DOWN
+2026-05-27 11:01:21,776 [vigia.notificaciones] INFO: Notificacion omitida (sin canales configurados): Caida: 192.168.1.137
+INFO:     127.0.0.1:60236 - "GET /api/poll?nombre_cliente=trekker_net HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60236 - "GET /api/clientes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60236 - "GET /api/clientes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60236 - "GET /api/stats?nombre_cliente=trekker_net HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51080 - "GET /api/dispositivos/con-estado?nombre_cliente=trekker_net HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51088 - "GET /api/alertas?resuelta=0&nombre_cliente=trekker_net HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [49740]

@@ -3,10 +3,12 @@ import random
 import math
 import os
 import re
+import socket
+import httpx
 import nmap
 from datetime import datetime
 from sqlalchemy.orm import Session
-from backend.models import Dispositivo, Servicio, PosicionTopologia
+from backend.models import Dispositivo, Servicio, PosicionTopologia, OuiVendor, MacVendorExact, PortHeuristic
 from backend.database import get_session, init_db, get_or_create_cliente
 try:
     from agente.snmp_reader import obtener_info_dispositivo
@@ -547,8 +549,170 @@ HOSTNAME_FABRICANTE = [
 ]
 
 
+PORT_HEURISTIC = [
+    # CCTV
+    (554, "tcp", "Hikvision/Dahua", 65),
+    (80, "tcp", "Hikvision/Dahua", 40),
+    (37777, "tcp", "Dahua", 70),
+    (37778, "tcp", "Dahua", 70),
+    (8000, "tcp", "Hikvision", 65),
+    # MikroTik
+    (8291, "tcp", "MikroTik", 75),
+    (8728, "tcp", "MikroTik", 70),
+    (8729, "tcp", "MikroTik", 70),
+    # Ubiquiti
+    (8843, "tcp", "Ubiquiti", 65),
+    (27117, "tcp", "Ubiquiti", 65),
+    # Cisco
+    (22, "tcp", "Cisco", 40),
+    (161, "udp", "Cisco", 45),
+    # TP-Link
+    (20002, "tcp", "TP-Link", 60),
+    # Servidores/PCs
+    (3389, "tcp", "Microsoft Windows", 55),
+    (445, "tcp", "Microsoft Windows", 40),
+    (139, "tcp", "Microsoft Windows", 40),
+    (5900, "tcp", "Linux/VNC", 40),
+    # NAS
+    (5000, "tcp", "Synology", 70),
+    (5001, "tcp", "Synology", 70),
+    # Impresoras
+    (631, "tcp", "Impresora", 50),
+    (515, "tcp", "Impresora", 50),
+    # Switches gestionables
+    (23, "tcp", "Switch/Gestionable", 30),
+]
+
+
+def _normalizar_mac(mac: str) -> str:
+    raw = mac.strip().upper().replace("-", "").replace(":", "").replace(".", "")
+    if len(raw) != 12:
+        return mac.strip().upper()
+    return ":".join(raw[i:i+2] for i in range(0, 12, 2))
+
+
+def _oui_de_mac(mac: str) -> str:
+    partes = _normalizar_mac(mac).split(":")
+    return ":".join(partes[:3]) if len(partes) >= 3 else ""
+
+
+def resolve_vendor(mac: str, open_ports: list = None, reconcile: bool = False) -> dict:
+    if not mac or mac == "00:00:00:00:00:00":
+        return {"vendor": None, "method": None, "confidence": 0}
+    mac_norm = _normalizar_mac(mac)
+    oui = _oui_de_mac(mac)
+
+    if _es_mac_aleatoria(mac_norm):
+        return {"vendor": "", "method": "random_mac", "confidence": 0}
+
+    session = get_session()
+    try:
+        # 1. MAC exacta
+        exact = session.query(MacVendorExact).filter_by(mac=mac_norm).first()
+        if exact:
+            return {"vendor": exact.vendor, "method": "mac_exact", "confidence": exact.confidence or 100}
+
+        if not oui:
+            return {"vendor": None, "method": None, "confidence": 0}
+
+        # 2. OUI custom
+        custom = session.query(OuiVendor).filter_by(oui=oui, source="custom").first()
+        if custom:
+            return {"vendor": custom.vendor, "method": "oui_custom", "confidence": custom.confidence or 80}
+
+        # 3. OUI IEEE
+        ieee = session.query(OuiVendor).filter_by(oui=oui, source="ieee").first()
+        if ieee:
+            return {"vendor": ieee.vendor, "method": "oui_ieee", "confidence": ieee.confidence or 70}
+
+    finally:
+        session.close()
+
+    # 4. API externa (solo en reconciliación)
+    if reconcile:
+        try:
+            r = httpx.get(f"https://api.macvendors.com/{mac_norm}", timeout=5.0)
+            if r.status_code == 200:
+                vendor = r.text.strip()
+                if vendor:
+                    _cachear_api_result(mac_norm, oui, vendor)
+                    return {"vendor": vendor, "method": "api_lookup", "confidence": 85}
+        except Exception:
+            pass
+
+    # 5. Puerto heuristic
+    if open_ports:
+        vendor_ports = {}
+        for port, proto, vnd, conf in PORT_HEURISTIC:
+            if port in [p.get("puerto") for p in open_ports if p.get("protocolo", "tcp") == proto]:
+                if vnd not in vendor_ports or conf > vendor_ports[vnd]:
+                    vendor_ports[vnd] = conf
+        if vendor_ports:
+            best = max(vendor_ports, key=vendor_ports.get)
+            return {"vendor": best, "method": "port_heuristic", "confidence": vendor_ports[best]}
+
+    return {"vendor": None, "method": None, "confidence": 0}
+
+
+def _ptr_dns(ip: str) -> dict:
+    try:
+        import dns.resolver
+        import dns.reversename
+        rev = dns.reversename.from_address(ip)
+        answers = dns.resolver.resolve(rev, "PTR", lifetime=3.0)
+        for answer in answers:
+            hostname = str(answer).rstrip(".")
+            if hostname:
+                return {"hostname": hostname, "method": "ptr_dns", "confidence": 90}
+    except Exception:
+        pass
+    try:
+        hostname, _, _ = socket.gethostbyaddr(ip)
+        if hostname:
+            return {"hostname": hostname, "method": "ptr_dns", "confidence": 85}
+    except Exception:
+        pass
+    return {"hostname": None, "method": None, "confidence": 0}
+
+
+def resolve_hostname(ip: str) -> dict:
+    if not ip:
+        return {"hostname": None, "method": None, "confidence": 0}
+
+    # 1. PTR DNS inverso
+    r = _ptr_dns(ip)
+    if r["hostname"]:
+        return r
+
+    # 2. SNMP sysName (OID 1.3.6.1.2.1.1.5.0)
+    if _SNMP_DISPONIBLE:
+        for community in ["public", "private", "snmp", "default", "internal", "monitor", "read", "admin"]:
+            try:
+                info = obtener_info_dispositivo(ip, community=community)
+                if info and info.get("snmp_disponible") and info.get("nombre"):
+                    nombre = info["nombre"].strip()
+                    if nombre:
+                        return {"hostname": nombre, "method": "snmp_sysname", "confidence": 85}
+            except Exception:
+                pass
+
+    return {"hostname": None, "method": None, "confidence": 0}
+
+
+def _cachear_api_result(mac: str, oui: str, vendor: str):
+    session = get_session()
+    try:
+        existente = session.query(OuiVendor).filter_by(oui=oui, source="custom").first()
+        if not existente:
+            session.add(OuiVendor(oui=oui, vendor=vendor, source="custom", confidence=80))
+        session.commit()
+    except Exception:
+        session.rollback()
+    finally:
+        session.close()
+
+
 def _es_mac_aleatoria(mac: str) -> bool:
-    """Las MACs con bit U/L=1 son locales/aleatorias (no se puede identificar fabricante por OUI)."""
     try:
         return bool(int(mac[:2], 16) & 0x02)
     except (ValueError, IndexError):
@@ -569,7 +733,7 @@ def detectar_fabricante(mac: str, vendor_nmap: str = "", hostname: str = "") -> 
     if mac and mac != "00:00:00:00:00:00":
         if _es_mac_aleatoria(mac):
             return ""
-        return "desconocido"
+        return ""
     return ""
 
 SERVICIO_A_TIPO = {
@@ -683,14 +847,24 @@ def _escáner_un_rango(nm, rango: str, timeout: int) -> list[dict]:
     return hosts
 
 
-def _agregar_o_actualizar(session, ip, hostname, mac, fabricante, tipo, servicios, serial_snmp, descripcion_snmp, cid):
+def _agregar_o_actualizar(session, ip, hostname, mac, fabricante, tipo, servicios, serial_snmp, descripcion_snmp, cid, vendor_result=None, hostname_result=None):
     octetos = ip.split(".")
     segmento_ip = f"{octetos[0]}.{octetos[1]}.{octetos[2]}.0/24" if len(octetos) == 4 else ""
     existente = session.query(Dispositivo).filter_by(ip=ip, cliente_id=cid).first()
     if existente:
-        existente.hostname = hostname or existente.hostname
+        if hostname:
+            existente.hostname = hostname
+        elif hostname_result and hostname_result.get("hostname") and not existente.hostname:
+            existente.hostname = hostname_result["hostname"]
+            existente.hostname_method = hostname_result["method"]
+            existente.hostname_confidence = hostname_result["confidence"]
         existente.mac = mac or existente.mac
-        existente.fabricante = fabricante or existente.fabricante
+        if fabricante and fabricante != "desconocido":
+            existente.fabricante = fabricante
+        elif vendor_result and vendor_result.get("vendor"):
+            existente.fabricante = vendor_result["vendor"]
+            existente.vendor_method = vendor_result["method"]
+            existente.vendor_confidence = vendor_result["confidence"]
         if tipo:
             prioridad = {"router": 5, "camara": 5, "computadora": 4, "impresora": 4, "servidor": 3, "dispositivo": 1, "desconocido": 0}
             if prioridad.get(tipo, 0) >= prioridad.get(existente.tipo or "", 0):
@@ -703,8 +877,24 @@ def _agregar_o_actualizar(session, ip, hostname, mac, fabricante, tipo, servicio
         dispositivo_db = existente
         actualizado = True
     else:
+        fab = fabricante
+        vmethod = None
+        vconf = None
+        if (not fab or fab == "desconocido") and vendor_result and vendor_result.get("vendor"):
+            fab = vendor_result["vendor"]
+            vmethod = vendor_result["method"]
+            vconf = vendor_result["confidence"]
+        hname = hostname
+        hmethod = None
+        hconf = None
+        if not hname and hostname_result and hostname_result.get("hostname"):
+            hname = hostname_result["hostname"]
+            hmethod = hostname_result["method"]
+            hconf = hostname_result["confidence"]
         dispositivo_db = Dispositivo(
-            ip=ip, hostname=hostname, mac=mac, fabricante=fabricante,
+            ip=ip, hostname=hname, mac=mac, fabricante=fab,
+            vendor_method=vmethod, vendor_confidence=vconf,
+            hostname_method=hmethod, hostname_confidence=hconf,
             tipo=tipo, segmento=segmento_ip, serial=serial_snmp,
             descripcion=descripcion_snmp or "",
             ultima_vez=datetime.now(), cliente_id=cid,
@@ -763,15 +953,18 @@ def escanear(rango_ip: str, nombre_cliente: str, timeout: int = 300) -> dict:
             mac = info.get("mac", "") or _mac_arp(ip) or _mac_local(ip)
             fabricante = info.get("fabricante", "") or detectar_fabricante(mac, info.get("vendor", ""))
             tipo_inicial = "dispositivo" if not session.query(Dispositivo).filter_by(ip=ip, cliente_id=cid).first() else ""
+            hr = resolve_hostname(ip) if tipo_inicial else None
             disp, upd = _agregar_o_actualizar(
                 session, ip, "", mac, fabricante,
                 tipo_inicial, [], None, None, cid,
+                hostname_result=hr,
             )
             if not upd:
                 nuevos += 1
             else:
                 actualizados += 1
-            resultados.append({"ip": ip, "hostname": "", "mac": mac, "fabricante": fabricante, "tipo": tipo_inicial or "dispositivo", "puertos": []})
+            hname = hr["hostname"] if hr and hr.get("hostname") else ""
+            resultados.append({"ip": ip, "hostname": hname, "mac": mac, "fabricante": fabricante, "tipo": tipo_inicial or "dispositivo", "puertos": []})
 
         session.commit()
 
@@ -847,23 +1040,40 @@ def escanear(rango_ip: str, nombre_cliente: str, timeout: int = 300) -> dict:
                         if servicio_nombre:
                             servicios_detectados.append(servicio_nombre)
 
+            vendor_result = None
+            if (not fabricante or fabricante == "desconocido") and mac and puertos_abiertos:
+                vendor_result = resolve_vendor(mac, open_ports=puertos_abiertos)
+                if vendor_result and vendor_result.get("vendor"):
+                    fabricante = vendor_result["vendor"]
+
             tipo = detectar_tipo(servicios_detectados)
             tipo_hostname = detectar_tipo_por_hostname(hostname)
             if tipo_hostname and PRIORIDAD_TIPO.get(tipo_hostname, 0) > PRIORIDAD_TIPO.get(tipo, -1):
                 tipo = tipo_hostname
 
-            info_snmp = obtener_info_dispositivo(ip, community="public")
-            if info_snmp and info_snmp["snmp_disponible"]:
-                serial_snmp = info_snmp.get("serial")
-                desc_snmp = info_snmp.get("sistema", "")[:120] if info_snmp.get("sistema") else None
-            else:
-                serial_snmp = None
-                desc_snmp = None
+            serial_snmp = None
+            snmp_hostname = None
+            desc_snmp = None
+            for community in ["public", "private", "snmp", "default", "internal", "monitor", "read", "admin", "secret", "ciscoworks", "cisco", "hponline", "manager"]:
+                info_snmp = obtener_info_dispositivo(ip, community=community)
+                if info_snmp and info_snmp["snmp_disponible"]:
+                    serial_snmp = info_snmp.get("serial")
+                    desc_snmp = info_snmp.get("sistema", "")[:120] if info_snmp.get("sistema") else None
+                    snmp_hostname = info_snmp.get("nombre", "").strip()
+                    break
+
+            # Si nmap no dio hostname, usar SNMP sysName
+            hostname_result = None
+            if not hostname and snmp_hostname:
+                hostname = snmp_hostname
+                hostname_result = {"hostname": snmp_hostname, "method": "snmp_sysname", "confidence": 85}
 
             _agregar_o_actualizar(
                 session, ip, hostname, mac, fabricante,
                 tipo, puertos_abiertos,
                 serial_snmp, desc_snmp, cid,
+                vendor_result=vendor_result,
+                hostname_result=hostname_result,
             )
 
             for r in resultados:
@@ -926,13 +1136,16 @@ def descubrir_nuevos(session, cid: int) -> dict:
                 if "vendor" in nm[ip] and mac in nm[ip]["vendor"]:
                     vendor = nm[ip]["vendor"][mac]
                 fabricante = detectar_fabricante(mac, vendor)
+                hr = resolve_hostname(ip)
                 disp, upd = _agregar_o_actualizar(
                     session, ip, "", mac, fabricante,
                     "dispositivo", [], None, None, cid,
+                    hostname_result=hr,
                 )
                 if not upd:
                     nuevos += 1
-                resultados.append({"ip": ip, "mac": mac, "fabricante": fabricante, "nuevo": not upd})
+                hname = hr["hostname"] if hr and hr.get("hostname") else ""
+                resultados.append({"ip": ip, "mac": mac, "hostname": hname, "fabricante": fabricante, "nuevo": not upd})
                 ips_existentes.add(ip)
         except Exception as e:
             logger.warning(f"Error escaneando segmento {seg}: {e}")
@@ -945,21 +1158,19 @@ def descubrir_nuevos(session, cid: int) -> dict:
 
 
 def reconciliar_dispositivos(session: Session, cid: int = 0) -> dict:
-    """Re-evalúa tipo y fabricante de todos los dispositivos activos
-    usando hostname + servicios + MAC. Corre automático en cada ciclo
-    de polling y al iniciar la app."""
     dispositivos = session.query(Dispositivo).filter_by(activo=1, cliente_id=cid).all()
     corregidos_tipo = 0
     corregidos_fab = 0
+    api_resueltos = 0
+    port_resueltos = 0
+    hostnames_resueltos = 0
     for d in dispositivos:
         cambios = False
-        # Re-evaluar tipo: hostname tiene prioridad, servicios como fallback
         tipo_actual = d.tipo or ""
         tipo_hostname = detectar_tipo_por_hostname(d.hostname or "")
         servicios_db = session.query(Servicio).filter_by(dispositivo_id=d.id).all()
         nombres_servicios = list({s.servicio for s in servicios_db if s.servicio and s.estado == "abierto"})
         tipo_servicios = detectar_tipo(nombres_servicios)
-        # Elegir el de mayor prioridad
         mejor_tipo = ""
         for cand in [tipo_hostname, tipo_servicios]:
             if cand and PRIORIDAD_TIPO.get(cand, 0) > PRIORIDAD_TIPO.get(mejor_tipo, -1):
@@ -968,41 +1179,51 @@ def reconciliar_dispositivos(session: Session, cid: int = 0) -> dict:
             d.tipo = mejor_tipo
             corregidos_tipo += 1
             cambios = True
-        # Re-evaluar fabricante
+
         fab_actual = d.fabricante or ""
-        if d.mac:
-            nuevo_fab = detectar_fabricante(d.mac, hostname=d.hostname or "")
-            if nuevo_fab:
-                if not fab_actual:
-                    d.fabricante = nuevo_fab
-                    corregidos_fab += 1
-                    cambios = True
-                elif nuevo_fab != "desconocido":
-                    if fab_actual == "desconocido" or (
-                        d.hostname and any(
-                            p in d.hostname for p, _ in [
-                                ("ThinkPad", "Lenovo"), ("IdeaPad", "Lenovo"),
-                                ("DESKTOP-", "Windows PC"), ("LAPTOP-", "Windows Laptop"),
-                                ("iPhone", "Apple"), ("SM-", "Samsung"),
-                            ]
-                        )
-                    ):
-                        d.fabricante = nuevo_fab
-                        corregidos_fab += 1
-                        cambios = True
-        # Si el fabricante es una marca de PC y el tipo es "camara",
-        # probablemente es un PC con RTSP abierto, no una cámara real
+        if d.mac and (not fab_actual or fab_actual == "desconocido"):
+            puertos = [{"puerto": s.puerto, "protocolo": s.protocolo or "tcp"} for s in servicios_db]
+            res = resolve_vendor(d.mac, open_ports=puertos, reconcile=True)
+            if res["vendor"] and res["vendor"] != fab_actual:
+                d.fabricante = res["vendor"]
+                d.vendor_method = res["method"]
+                d.vendor_confidence = res["confidence"]
+                corregidos_fab += 1
+                cambios = True
+                if res["method"] == "api_lookup":
+                    api_resueltos += 1
+                elif res["method"] == "port_heuristic":
+                    port_resueltos += 1
+                elif res["method"] == "oui_custom" or res["method"] == "oui_ieee":
+                    pass
+
+        hostname_actual = d.hostname or ""
+        if not hostname_actual:
+            hr = resolve_hostname(d.ip)
+            if hr and hr.get("hostname"):
+                d.hostname = hr["hostname"]
+                d.hostname_method = hr["method"]
+                d.hostname_confidence = hr["confidence"]
+                hostnames_resueltos += 1
+                cambios = True
+
         if d.tipo == "camara" and d.fabricante in PC_BRANDS:
             d.tipo = "servidor"
             corregidos_tipo += 1
             cambios = True
             logger.warning(f"Reclasificado {d.ip} de camara→servidor (fabricante={d.fabricante} es PC)")
         if cambios:
-            logger.info(f"Reconciliado {d.ip}: tipo={d.tipo}, fabricante={d.fabricante}")
-    if corregidos_tipo or corregidos_fab:
+            logger.info(f"Reconciliado {d.ip}: tipo={d.tipo}, fabricante={d.fabricante} ({d.vendor_method}/{d.vendor_confidence})")
+    if corregidos_tipo or corregidos_fab or hostnames_resueltos:
         session.commit()
-        logger.info(f"Reconciliación: {corregidos_tipo} tipos, {corregidos_fab} fabricantes corregidos")
-    return {"corregidos_tipo": corregidos_tipo, "corregidos_fab": corregidos_fab}
+        logger.info(f"Reconciliación: {corregidos_tipo} tipos, {corregidos_fab} fabricantes ({api_resueltos} API, {port_resueltos} port), {hostnames_resueltos} hostnames")
+    return {
+        "corregidos_tipo": corregidos_tipo,
+        "corregidos_fab": corregidos_fab,
+        "api_resueltos": api_resueltos,
+        "port_resueltos": port_resueltos,
+        "hostnames_resueltos": hostnames_resueltos,
+    }
 
 
 def escanear_puertos(dispositivo_id: int, nombre_cliente: str) -> list[dict]:

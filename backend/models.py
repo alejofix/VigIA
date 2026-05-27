@@ -36,6 +36,10 @@ class Dispositivo(Base):
     serial = Column(Text)
     activo = Column(Integer, default=1)
     tipo_asignacion_ip = Column(Text, default="desconocido")
+    vendor_method = Column(Text)
+    vendor_confidence = Column(Integer)
+    hostname_method = Column(Text)
+    hostname_confidence = Column(Integer)
 
     cliente_rel = relationship("Cliente", back_populates="dispositivos")
     pings = relationship("Ping", back_populates="dispositivo", cascade="all, delete-orphan")
@@ -116,3 +120,40 @@ class Credencial(Base):
     observacion = Column(Text)
 
     dispositivo = relationship("Dispositivo", back_populates="credenciales")
+
+
+class OuiVendor(Base):
+    __tablename__ = "oui_vendor"
+    __table_args__ = (
+        UniqueConstraint("oui", "source", name="uq_oui_source"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    oui = Column(String(8), nullable=False)
+    vendor = Column(String(255), nullable=False)
+    source = Column(String(10), default="custom")
+    confidence = Column(Integer, default=70)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class MacVendorExact(Base):
+    __tablename__ = "mac_vendor_exact"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    mac = Column(String(17), nullable=False, unique=True)
+    vendor = Column(String(255), nullable=False)
+    confidence = Column(Integer, default=100)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class PortHeuristic(Base):
+    __tablename__ = "port_heuristic"
+    __table_args__ = (
+        UniqueConstraint("puerto", "protocolo", name="uq_port_protocol"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    puerto = Column(Integer, nullable=False)
+    protocolo = Column(String(10), default="tcp")
+    vendor = Column(String(255), nullable=False)
+    confidence = Column(Integer, default=60)

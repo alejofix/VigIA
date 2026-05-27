@@ -29,6 +29,10 @@ class DispositivoOut(BaseModel):
     segmento: Optional[str] = None
     serial: Optional[str] = None
     tipo_asignacion_ip: Optional[str] = "desconocido"
+    vendor_method: Optional[str] = None
+    vendor_confidence: Optional[int] = None
+    hostname_method: Optional[str] = None
+    hostname_confidence: Optional[int] = None
 
 
 class PingOut(BaseModel):

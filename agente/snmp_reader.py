@@ -15,12 +15,30 @@ INTERFACES_OID = "1.3.6.1.2.1.2.2.1.2"
 # OIDs comunes para número de serie
 SERIAL_OIDS = [
     "1.3.6.1.2.1.47.1.1.1.1.11.1",      # entPhysicalSerialNum (genérico)
+    "1.3.6.1.2.1.43.5.1.1.17.1",        # prtGeneralSerialNumber (impresoras)
     "1.3.6.1.4.1.9.9.99.1.1.1.1.3.1",   # Cisco
+    "1.3.6.1.4.1.9.3.6.3.0",            # Cisco (alternativo)
     "1.3.6.1.4.1.318.1.1.1.1.1.1.0",    # APC
     "1.3.6.1.4.1.674.10898.100.1.2.0",  # Dell
     "1.3.6.1.4.1.2636.3.40.1.4.1.1.1.1",# Juniper
-    "1.3.6.1.4.1.171.11.1.1.2.0",       # HP
+    "1.3.6.1.4.1.171.11.1.1.2.0",       # HP / Aruba
     "1.3.6.1.4.1.198.1.1.1.1.1.0",      # Huawei
+    "1.3.6.1.4.1.14988.1.1.1.1.1.0",    # MikroTik
+    "1.3.6.1.4.1.41112.1.4.1.1.1.0",    # Ubiquiti
+    "1.3.6.1.4.1.12356.101.1.1.1.0",    # Fortinet
+    "1.3.6.1.4.1.14823.1.1.2.1.1.0",    # Aruba (alternativo)
+    "1.3.6.1.4.1.8072.3.2.10",          # Net-SNMP (Linux)
+    "1.3.6.1.4.1.4413.1.1.1.1.1.1.0",  # TP-Link
+    "1.3.6.1.4.1.890.1.1.1.1.1.0",     # Zyxel
+    "1.3.6.1.4.1.4526.1.1.1.1.1.0",    # D-Link
+    "1.3.6.1.4.1.211.1.1.1.1.1.0",     # Extreme
+    "1.3.6.1.4.1.25506.1.1.1.1.1.0",   # H3C / Comware
+    "1.3.6.1.4.1.6486.1.1.1.1.1.0",    # Alcatel-Lucent
+    "1.3.6.1.4.1.8744.1.1.1.1.1.0",    # Grandstream
+    "1.3.6.1.4.1.2435.1.1.1.1.1.0",    # Allied Telesis
+    "1.3.6.1.4.1.6527.1.1.1.1.1.0",    # Nokia/Alcatel SR
+    "1.3.6.1.4.1.14179.1.1.1.1.1.0",   # Ruckus
+    "1.3.6.1.4.1.28507.1.1.1.1.1.0",   # Meraki
 ]
 
 
@@ -29,21 +47,24 @@ def leer_snmp(ip: str, oid: str, community: str = "public", puerto: int = 161) -
         iterator = getCmd(
             SnmpEngine(),
             CommunityData(community, mpModel=1),
-            UdpTransportTarget((ip, puerto), timeout=1, retries=0),
+            UdpTransportTarget((ip, puerto), timeout=3, retries=1),
             ContextData(),
             ObjectType(ObjectIdentity(oid)),
         )
         error_indication, error_status, error_index, var_binds = next(iterator)
 
         if error_indication:
+            logger.debug("SNMP error en %s OID %s: %s", ip, oid, error_indication)
             return None
         if error_status:
+            logger.debug("SNMP error-status en %s OID %s: %s", ip, oid, error_status.prettyPrint())
             return None
 
         for var_bind in var_binds:
             return str(var_bind[1])
 
-    except Exception:
+    except Exception as e:
+        logger.debug("SNMP exception en %s OID %s: %s", ip, oid, e)
         return None
 
 
@@ -53,7 +74,7 @@ def leer_interfaces(ip: str, community: str = "public", puerto: int = 161) -> li
         iterator = nextCmd(
             SnmpEngine(),
             CommunityData(community, mpModel=1),
-            UdpTransportTarget((ip, puerto), timeout=1, retries=0),
+            UdpTransportTarget((ip, puerto), timeout=3, retries=1),
             ContextData(),
             ObjectType(ObjectIdentity(INTERFACES_OID)),
             lexicographicMode=False,

@@ -225,6 +225,18 @@
   .modal input:focus { outline: none; border-color: rgba(0,200,212,0.25); }
   .modal-btns { display: flex; gap: 8px; justify-content: flex-end; }
 
+  /* ── Vendor method badges ── */
+  .vendor-badge { display: inline-flex; align-items: center; gap: 4px; position: relative; }
+  .vendor-badge .method-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .vendor-badge .method-dot.mac-exact { background: #22c55e; }
+  .vendor-badge .method-dot.oui-custom { background: #3b82f6; }
+  .vendor-badge .method-dot.oui-ieee { background: #6366f1; }
+  .vendor-badge .method-dot.api-lookup { background: #06b6d4; }
+  .vendor-badge .method-dot.port-heuristic { background: #f97316; }
+  .vendor-badge .method-dot.null { background: #9ca3af; }
+  .vendor-badge .tooltip-text { visibility: hidden; width: 140px; background: #1a1a2e; color: #d0d4e0; text-align: center; padding: 4px 8px; border-radius: 4px; font-size: 10px; position: absolute; z-index: 1000; bottom: 125%; left: 50%; transform: translateX(-50%); white-space: nowrap; border: 1px solid var(--border); opacity: 0; transition: opacity 0.15s; pointer-events: none; }
+  .vendor-badge:hover .tooltip-text { visibility: visible; opacity: 1; }
+
   /* ── Footer ── */
   .footer { margin-top: 40px; padding: 16px 24px; border-top: 1px solid var(--border); text-align: center; font-size: 9px; color: rgba(112,120,136,0.4); letter-spacing: 0.1em; }
   .footer strong { color: rgba(112,120,136,0.6); font-weight: 500; }
@@ -301,7 +313,7 @@
           <button class="btn" onclick="reconciliarRed()">♻ Reconciliar</button>
           <button class="btn" onclick="mostrarModalCleanPings()">🧹 Limpiar pings</button>
           <button class="btn" onclick="borrarRed()" style="color:var(--down);border-color:rgba(232,72,72,0.2);">✖ Borrar Red</button>
-          <a href="http://localhost:8080/mapa" class="btn btn-mapa">🗺 Mapa</a>
+          <a id="mapLink" href="#" class="btn btn-mapa">🗺 Mapa</a>
           <span class="contador" id="contador">—</span>
         </div>
 
@@ -419,11 +431,17 @@
       <div style="display:flex;flex-direction:column;gap:8px;">
         <div id="serialGroupReadonly" style="display:none;flex-direction:column;gap:4px;">
           <label style="font-size:11px;color:var(--muted);">Número de serie <span style="color:var(--teal);">autodetectado por SNMP</span></label>
-          <span id="spanSerial" style="color:var(--text);padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:var(--font);"></span>
+          <div style="display:flex;gap:4px;">
+            <span id="spanSerial" style="flex:1;color:var(--text);padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:var(--font);"></span>
+            <button class="btn btn-sm" onclick="reDetectarSerial()" title="Re-intentar detección SNMP" style="font-size:12px;padding:4px 8px;white-space:nowrap;">🔄</button>
+          </div>
         </div>
         <div id="serialGroupManual" style="display:none;flex-direction:column;gap:4px;">
           <label style="font-size:11px;color:var(--muted);">Número de serie <span style="color:var(--warn);">no detectado</span></label>
-          <input id="inputSerial" type="text" placeholder="ingresar serial manualmente" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
+          <div style="display:flex;gap:4px;">
+            <input id="inputSerial" type="text" placeholder="ingresar serial manualmente" style="flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
+            <button class="btn btn-sm" onclick="reDetectarSerial()" title="Intentar detección SNMP" style="font-size:12px;padding:4px 8px;white-space:nowrap;">🔄</button>
+          </div>
         </div>
         <label style="font-size:11px;color:var(--muted);">Alias</label>
         <input id="inputAlias" placeholder="alias del dispositivo" autocomplete="off" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
@@ -485,9 +503,21 @@ let pollIntervalId = null;
 let pollContador = 0;
 let pollActivo = false;
 
+// === CONFIGURACIÓN ===
+// MODO_XAMPP = true:  frontend servido por Apache (XAMPP), backend Python en PUERTO_BACKEND
+// MODO_XAMPP = false: backend Python sirve todo (puerto 8080)
+var MODO_XAMPP = true;
+var PUERTO_BACKEND = 8080;
+// =====================
+
 var API_BASE = '';
-if (window.location.port === '' || window.location.port === '80' || window.location.port === '443') {
-  API_BASE = 'http://localhost:8080';
+var _ml = document.getElementById('mapLink');
+
+if (MODO_XAMPP) {
+  API_BASE = 'http://localhost:' + PUERTO_BACKEND;
+  if (_ml) _ml.href = 'mapa.html';
+} else {
+  if (_ml) _ml.href = '/mapa';
 }
 
 async function apiFetch(url, opts = {}) {
@@ -604,9 +634,25 @@ async function cargarDispositivos() {
           <option value="estatica" ${asig==='estatica'?'selected':''}>Estática</option>
         </select></td>
         <td style="font-weight:600;">${d.alias || '—'}</td>
-        <td>${d.hostname || '—'}</td>
+        <td>${(()=>{
+          const hn = d.hostname || '—';
+          const method = d.hostname_method || '';
+          const conf = d.hostname_confidence || '';
+          const dotClass = {'ptr_dns':'api-lookup','snmp_sysname':'oui-custom','nmap_hostname':'oui-ieee'}[method] || 'null';
+          const methodLabel = {'ptr_dns':'PTR DNS','snmp_sysname':'SNMP sysName','nmap_hostname':'nmap -sV'}[method] || method;
+          const tooltip = method ? `${methodLabel} (conf: ${conf}%)` : '';
+          return `<span class="vendor-badge"${tooltip ? ` title="${tooltip}"` : ''}><span class="method-dot ${dotClass}"></span>${hn}</span>`;
+        })()}</td>
         <td style="font-size:10px;color:var(--muted);font-family:monospace;">${d.mac || '—'}</td>
-        <td style="font-size:10px;color:var(--muted);">${d.fabricante || '—'}</td>
+        <td style="font-size:10px;color:var(--muted);">${(()=>{
+          const fab = d.fabricante || '—';
+          const method = d.vendor_method || '';
+          const conf = d.vendor_confidence || '';
+          const dotClass = {'mac_exact':'mac-exact','oui_custom':'oui-custom','oui_ieee':'oui-ieee','api_lookup':'api-lookup','port_heuristic':'port-heuristic'}[method] || 'null';
+          const methodLabel = {'mac_exact':'MAC exacta','oui_custom':'OUI custom','oui_ieee':'OUI IEEE','api_lookup':'API externa','port_heuristic':'Puerto heuristic'}[method] || method;
+          const tooltip = method ? `${methodLabel} (conf: ${conf}%)` : '';
+          return `<span class="vendor-badge"${tooltip ? ` title="${tooltip}"` : ''}><span class="method-dot ${dotClass}"></span>${fab}</span>`;
+        })()}</td>
         <td><span class="tipo-tag" style="${(()=>{const c={router:'#00c8d4',servidor:'#4ad8e6',computadora:'#d0d4e0',camara:'#22C55E',impresora:'#cc8800',dispositivo:'#707888'}[d.tipo];return c?'color:'+c+';border-color:'+c+'44':'color:var(--teal-lt)'})()}}">${d.tipo || 'desconocido'}</span></td>
         <td><span class="status-dot ${dotClass}"></span>${estadoTexto}</td>
         <td>${latStr}</td>
@@ -1026,6 +1072,33 @@ function eliminarDispositivo(id, ip) {
   mostrarModalAdminKey('borrar_dispositivo', { id, ip });
 }
 
+async function reDetectarSerial() {
+  if (!_credencialId) return;
+  const btn = document.querySelector('#serialGroupReadonly .btn, #serialGroupManual .btn');
+  if (!btn) return;
+  btn.disabled = true;
+  btn.textContent = '⏳';
+  try {
+    const res = await apiFetch(`/api/dispositivos/${_credencialId}/re-detectar-serial`, {
+      method: 'POST',
+    });
+    if (res.serial) {
+      document.getElementById('spanSerial').textContent = res.serial;
+      document.getElementById('inputSerial').value = res.serial;
+      document.getElementById('serialGroupReadonly').style.display = 'flex';
+      document.getElementById('serialGroupManual').style.display = 'none';
+      toast(`Serial detectado: ${res.serial}`);
+    } else {
+      toast(res.mensaje || 'No se pudo detectar serial');
+    }
+  } catch (e) {
+    toast('Error: ' + (e.message || 'No se pudo conectar'));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔄';
+  }
+}
+
 async function guardarCredenciales() {
   const data = {
     dispositivo_id: _credencialId,
@@ -1250,7 +1323,10 @@ async function ejecutarReconciliacion(clave) {
       method: 'POST',
       headers: { 'X-Admin-Key': clave },
     });
-    toast(`Reconciliación completa: ${res.corregidos_tipo} tipos, ${res.corregidos_fab} fabricantes corregidos`);
+    const apiPart = res.api_resueltos > 0 ? `, ${res.api_resueltos} por API` : '';
+    const portPart = res.port_resueltos > 0 ? `, ${res.port_resueltos} por puertos` : '';
+    const hnPart = res.hostnames_resueltos > 0 ? `, ${res.hostnames_resueltos} hostnames` : '';
+    toast(`Reconciliación: ${res.corregidos_tipo} tipos, ${res.corregidos_fab} fabricantes${apiPart}${portPart}${hnPart}`);
     cargarDatos();
   } catch (e) {
     toast('Error: ' + (e.message.includes('403') ? 'Clave incorrecta' : e.message));

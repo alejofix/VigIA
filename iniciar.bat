@@ -17,14 +17,16 @@ IF NOT EXIST ".venv\installed" (
     type NUL > .venv\installed
 )
 
+if "%PORT%"=="" set PORT=8080
+
 echo [*] Iniciando backend...
-start uvicorn backend.main:app --host 0.0.0.0 --port 8080 --reload
+start uvicorn backend.main:app --host 0.0.0.0 --port %PORT% --reload
 
 timeout /t 2 /nobreak >nul
 
 echo [*] Abriendo dashboard...
-start http://localhost:8080
+start http://localhost:%PORT%
 
 echo.
-echo   VigIA corriendo en http://localhost:8080
+echo   VigIA corriendo en http://localhost:%PORT%
 pause
