@@ -1,0 +1,11 @@
+INFO:     Started server process [38816]
+INFO:     Waiting for application startup.
+2026-05-26 12:15:26,187 [vigia.nmap_scanner] INFO: Reconciliado 172.16.61.31: tipo=computadora, fabricante=Lenovo
+2026-05-26 12:15:26,194 [vigia.nmap_scanner] INFO: Reconciliación: 0 tipos, 1 fabricantes corregidos
+2026-05-26 12:15:26,195 [vigia.api] INFO: Reconciliación inicial completada
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [38816]

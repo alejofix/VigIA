@@ -16,17 +16,17 @@ from sqlalchemy.orm import Session
 import speedtest as st_lib
 import uuid
 
-from backend.database import init_db, get_session, get_db_path
-from backend.models import Base, Dispositivo, Ping, Alerta, Servicio, PosicionTopologia, Credencial
+from backend.database import init_db, get_session, get_or_create_cliente
+from backend.models import Cliente, Dispositivo, Ping, Alerta, Servicio, PosicionTopologia, Credencial
 from backend.schemas import (
     DispositivoCreate, DispositivoOut, DispositivoConEstado,
     PingOut, ServicioOut, AlertaOut,
     ScanRequest, PosicionUpdate, StatsOut, CredencialCreate, CredencialOut,
-    ChatRequest, ClienteSwitch, NotificacionRequest,
+    ChatRequest, NotificacionRequest,
 )
 from concurrent.futures import ThreadPoolExecutor
 import agente.nmap_scanner as nmap_scanner
-from agente.nmap_scanner import reconciliar_dispositivos
+from agente.nmap_scanner import reconciliar_dispositivos, descubrir_nuevos
 from agente.icmp_poller import ciclo_polling
 from exportar.generar_reporte import generar as generar_reporte
 from backend.chat import preguntar
@@ -38,7 +38,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger("vigia.api")
 
-DB_ACTIVA = "data/red_cliente.db"
 _executor = ThreadPoolExecutor(max_workers=2)
 _scan_tasks = {}
 _speedtest_tasks = {}
@@ -47,10 +46,9 @@ ADMIN_KEY = "qwerty"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    os.makedirs("data", exist_ok=True)
-    init_db(DB_ACTIVA)
+    init_db()
     try:
-        session = _get_session()
+        session = get_session()
         reconciliar_dispositivos(session)
         session.close()
         logger.info("Reconciliación inicial completada")
@@ -69,10 +67,8 @@ app.add_middleware(
 
 if os.path.exists("frontend"):
     app.mount("/static", StaticFiles(directory="frontend"), name="static")
-
-
-def _get_session():
-    return get_session(DB_ACTIVA)()
+if os.path.exists("reportes"):
+    app.mount("/reportes", StaticFiles(directory="reportes"), name="reportes")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -94,10 +90,16 @@ async def mapa():
 
 
 @app.get("/api/dispositivos", response_model=list[DispositivoOut])
-async def listar_dispositivos(activo: int | None = None, tipo: str | None = None, segmento: str | None = None):
-    session = _get_session()
+async def listar_dispositivos(
+    nombre_cliente: str = Query("red_cliente"),
+    activo: int | None = None,
+    tipo: str | None = None,
+    segmento: str | None = None,
+):
+    session = get_session()
     try:
-        q = session.query(Dispositivo)
+        cid = get_or_create_cliente(session, nombre_cliente)
+        q = session.query(Dispositivo).filter_by(cliente_id=cid)
         if activo is not None:
             q = q.filter_by(activo=activo)
         if tipo:
@@ -110,15 +112,21 @@ async def listar_dispositivos(activo: int | None = None, tipo: str | None = None
 
 
 @app.get("/api/dispositivos/con-estado", response_model=list[DispositivoConEstado])
-async def listar_dispositivos_con_estado():
-    session = _get_session()
+async def listar_dispositivos_con_estado(nombre_cliente: str = Query("red_cliente")):
+    session = get_session()
     try:
-        dispositivos = session.query(Dispositivo).all()
+        cid = get_or_create_cliente(session, nombre_cliente)
+        dispositivos = session.query(Dispositivo).filter_by(cliente_id=cid).all()
+        ids = [d.id for d in dispositivos]
+        if not ids:
+            return []
+
         max_ids = (
             session.query(
                 Ping.dispositivo_id,
                 func.max(Ping.id).label("max_id"),
             )
+            .filter(Ping.dispositivo_id.in_(ids))
             .group_by(Ping.dispositivo_id)
             .subquery()
         )
@@ -133,6 +141,7 @@ async def listar_dispositivos_con_estado():
                 Credencial.dispositivo_id,
                 Credencial.alias,
             )
+            .filter(Credencial.dispositivo_id.in_(ids))
             .distinct(Credencial.dispositivo_id)
             .subquery()
         )
@@ -140,6 +149,7 @@ async def listar_dispositivos_con_estado():
         return [
             DispositivoConEstado(
                 id=d.id,
+                cliente_id=d.cliente_id,
                 ip=d.ip,
                 hostname=d.hostname,
                 mac=d.mac,
@@ -163,10 +173,16 @@ async def listar_dispositivos_con_estado():
 
 
 @app.get("/api/segmentos")
-async def listar_segmentos():
-    session = _get_session()
+async def listar_segmentos(nombre_cliente: str = Query("red_cliente")):
+    session = get_session()
     try:
-        resultados = session.query(Dispositivo.segmento).distinct().all()
+        cid = get_or_create_cliente(session, nombre_cliente)
+        resultados = (
+            session.query(Dispositivo.segmento)
+            .filter_by(cliente_id=cid)
+            .distinct()
+            .all()
+        )
         segmentos = sorted(set(r[0] for r in resultados if r[0]))
         return {"segmentos": segmentos}
     finally:
@@ -174,10 +190,15 @@ async def listar_segmentos():
 
 
 @app.get("/api/dispositivos/{dispositivo_id}", response_model=DispositivoOut)
-async def obtener_dispositivo(dispositivo_id: int):
-    session = _get_session()
+async def obtener_dispositivo(dispositivo_id: int, nombre_cliente: str = Query("red_cliente")):
+    session = get_session()
     try:
-        d = session.get(Dispositivo, dispositivo_id)
+        cid = get_or_create_cliente(session, nombre_cliente)
+        d = (
+            session.query(Dispositivo)
+            .filter_by(id=dispositivo_id, cliente_id=cid)
+            .first()
+        )
         if not d:
             raise HTTPException(404, "Dispositivo no encontrado")
         return d
@@ -186,13 +207,18 @@ async def obtener_dispositivo(dispositivo_id: int):
 
 
 @app.post("/api/dispositivos", response_model=DispositivoOut, status_code=201)
-async def crear_dispositivo(data: DispositivoCreate):
-    session = _get_session()
+async def crear_dispositivo(data: DispositivoCreate, nombre_cliente: str = Query("red_cliente")):
+    session = get_session()
     try:
-        existente = session.query(Dispositivo).filter_by(ip=data.ip).first()
+        cid = get_or_create_cliente(session, nombre_cliente)
+        existente = (
+            session.query(Dispositivo)
+            .filter_by(ip=data.ip, cliente_id=cid)
+            .first()
+        )
         if existente:
             raise HTTPException(400, f"El IP {data.ip} ya existe")
-        d = Dispositivo(**data.model_dump())
+        d = Dispositivo(**data.model_dump(), cliente_id=cid)
         d.ultima_vez = datetime.now()
         session.add(d)
         session.commit()
@@ -207,10 +233,19 @@ class AsignacionIpUpdate(BaseModel):
 
 
 @app.patch("/api/dispositivos/{dispositivo_id}/asignacion-ip")
-async def actualizar_asignacion_ip(dispositivo_id: int, data: AsignacionIpUpdate):
-    session = _get_session()
+async def actualizar_asignacion_ip(
+    dispositivo_id: int,
+    data: AsignacionIpUpdate,
+    nombre_cliente: str = Query("red_cliente"),
+):
+    session = get_session()
     try:
-        d = session.get(Dispositivo, dispositivo_id)
+        cid = get_or_create_cliente(session, nombre_cliente)
+        d = (
+            session.query(Dispositivo)
+            .filter_by(id=dispositivo_id, cliente_id=cid)
+            .first()
+        )
         if not d:
             raise HTTPException(404, "Dispositivo no encontrado")
         d.tipo_asignacion_ip = data.tipo_asignacion_ip
@@ -221,14 +256,23 @@ async def actualizar_asignacion_ip(dispositivo_id: int, data: AsignacionIpUpdate
 
 
 @app.delete("/api/dispositivos/{dispositivo_id}")
-async def eliminar_dispositivo(dispositivo_id: int):
-    session = _get_session()
+async def eliminar_dispositivo(
+    dispositivo_id: int,
+    nombre_cliente: str = Query("red_cliente"),
+    x_admin_key: str = Header(None),
+):
+    if x_admin_key != ADMIN_KEY:
+        raise HTTPException(403, "Clave de seguridad inválida")
+    session = get_session()
     try:
-        d = session.get(Dispositivo, dispositivo_id)
+        cid = get_or_create_cliente(session, nombre_cliente)
+        d = (
+            session.query(Dispositivo)
+            .filter_by(id=dispositivo_id, cliente_id=cid)
+            .first()
+        )
         if not d:
             raise HTTPException(404, "Dispositivo no encontrado")
-        session.query(PosicionTopologia).filter_by(dispositivo_id=dispositivo_id).delete()
-        session.query(Credencial).filter_by(dispositivo_id=dispositivo_id).delete()
         session.delete(d)
         session.commit()
         return {"ok": True, "mensaje": f"Dispositivo {d.ip} eliminado"}
@@ -237,9 +281,21 @@ async def eliminar_dispositivo(dispositivo_id: int):
 
 
 @app.get("/api/dispositivos/{dispositivo_id}/pings", response_model=list[PingOut])
-async def listar_pings(dispositivo_id: int, limite: int = Query(50, le=500)):
-    session = _get_session()
+async def listar_pings(
+    dispositivo_id: int,
+    nombre_cliente: str = Query("red_cliente"),
+    limite: int = Query(50, le=500),
+):
+    session = get_session()
     try:
+        cid = get_or_create_cliente(session, nombre_cliente)
+        disp = (
+            session.query(Dispositivo)
+            .filter_by(id=dispositivo_id, cliente_id=cid)
+            .first()
+        )
+        if not disp:
+            raise HTTPException(404, "Dispositivo no encontrado")
         return (
             session.query(Ping)
             .filter_by(dispositivo_id=dispositivo_id)
@@ -252,9 +308,17 @@ async def listar_pings(dispositivo_id: int, limite: int = Query(50, le=500)):
 
 
 @app.get("/api/dispositivos/{dispositivo_id}/servicios", response_model=list[ServicioOut])
-async def listar_servicios(dispositivo_id: int):
-    session = _get_session()
+async def listar_servicios(dispositivo_id: int, nombre_cliente: str = Query("red_cliente")):
+    session = get_session()
     try:
+        cid = get_or_create_cliente(session, nombre_cliente)
+        disp = (
+            session.query(Dispositivo)
+            .filter_by(id=dispositivo_id, cliente_id=cid)
+            .first()
+        )
+        if not disp:
+            raise HTTPException(404, "Dispositivo no encontrado")
         return (
             session.query(Servicio)
             .filter_by(dispositivo_id=dispositivo_id)
@@ -265,10 +329,23 @@ async def listar_servicios(dispositivo_id: int):
 
 
 @app.get("/api/dispositivos/{dispositivo_id}/credenciales")
-async def obtener_credenciales(dispositivo_id: int):
-    session = _get_session()
+async def obtener_credenciales(
+    dispositivo_id: int,
+    nombre_cliente: str = Query("red_cliente"),
+    x_admin_key: str = Header(None),
+):
+    if x_admin_key != ADMIN_KEY:
+        raise HTTPException(403, "Clave de seguridad inválida")
+    session = get_session()
     try:
-        disp = session.get(Dispositivo, dispositivo_id)
+        cid = get_or_create_cliente(session, nombre_cliente)
+        disp = (
+            session.query(Dispositivo)
+            .filter_by(id=dispositivo_id, cliente_id=cid)
+            .first()
+        )
+        if not disp:
+            raise HTTPException(404, "Dispositivo no encontrado")
         cred = session.query(Credencial).filter_by(dispositivo_id=dispositivo_id).first()
         if cred:
             return {
@@ -292,10 +369,21 @@ async def obtener_credenciales(dispositivo_id: int):
 
 
 @app.post("/api/dispositivos/{dispositivo_id}/credenciales")
-async def guardar_credenciales(dispositivo_id: int, data: CredencialCreate):
-    session = _get_session()
+async def guardar_credenciales(
+    dispositivo_id: int,
+    data: CredencialCreate,
+    nombre_cliente: str = Query("red_cliente"),
+):
+    session = get_session()
     try:
-        disp = session.get(Dispositivo, dispositivo_id)
+        cid = get_or_create_cliente(session, nombre_cliente)
+        disp = (
+            session.query(Dispositivo)
+            .filter_by(id=dispositivo_id, cliente_id=cid)
+            .first()
+        )
+        if not disp:
+            raise HTTPException(404, "Dispositivo no encontrado")
         if data.serial and disp:
             disp.serial = data.serial
         cred = session.query(Credencial).filter_by(dispositivo_id=dispositivo_id).first()
@@ -308,6 +396,7 @@ async def guardar_credenciales(dispositivo_id: int, data: CredencialCreate):
         else:
             cred = Credencial(
                 dispositivo_id=dispositivo_id,
+                cliente_id=cid,
                 alias=data.alias,
                 admin_pass=data.admin_pass,
                 usuario=data.usuario,
@@ -324,11 +413,41 @@ async def guardar_credenciales(dispositivo_id: int, data: CredencialCreate):
         session.close()
 
 
-@app.get("/api/alertas", response_model=list[AlertaOut])
-async def listar_alertas(resuelta: int | None = None, tipo: str | None = None):
-    session = _get_session()
+@app.post("/api/dispositivos/{dispositivo_id}/escanear-puertos")
+async def escanear_puertos_dispositivo(
+    dispositivo_id: int,
+    nombre_cliente: str = Query("red_cliente"),
+):
+    session = get_session()
     try:
-        q = session.query(Alerta)
+        cid = get_or_create_cliente(session, nombre_cliente)
+        disp = session.query(Dispositivo).filter_by(id=dispositivo_id, cliente_id=cid).first()
+        if not disp:
+            raise HTTPException(404, "Dispositivo no encontrado")
+        session.close()
+
+        loop = asyncio.get_event_loop()
+        puertos = await loop.run_in_executor(
+            _executor, nmap_scanner.escanear_puertos, dispositivo_id, nombre_cliente,
+        )
+        return {"ok": True, "puertos": puertos}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error escaneando puertos: {e}")
+        raise HTTPException(500, f"Error: {str(e)}")
+
+
+@app.get("/api/alertas", response_model=list[AlertaOut])
+async def listar_alertas(
+    nombre_cliente: str = Query("red_cliente"),
+    resuelta: int | None = None,
+    tipo: str | None = None,
+):
+    session = get_session()
+    try:
+        cid = get_or_create_cliente(session, nombre_cliente)
+        q = session.query(Alerta).filter_by(cliente_id=cid)
         if resuelta is not None:
             q = q.filter_by(resuelta=resuelta)
         if tipo:
@@ -339,10 +458,15 @@ async def listar_alertas(resuelta: int | None = None, tipo: str | None = None):
 
 
 @app.post("/api/alertas/{alerta_id}/resolver")
-async def resolver_alerta(alerta_id: int):
-    session = _get_session()
+async def resolver_alerta(alerta_id: int, nombre_cliente: str = Query("red_cliente")):
+    session = get_session()
     try:
-        a = session.get(Alerta, alerta_id)
+        cid = get_or_create_cliente(session, nombre_cliente)
+        a = (
+            session.query(Alerta)
+            .filter_by(id=alerta_id, cliente_id=cid)
+            .first()
+        )
         if not a:
             raise HTTPException(404, "Alerta no encontrada")
         a.resuelta = 1
@@ -353,27 +477,71 @@ async def resolver_alerta(alerta_id: int):
 
 
 @app.delete("/api/alertas")
-async def borrar_alertas():
-    session = _get_session()
+async def borrar_alertas(nombre_cliente: str = Query("red_cliente")):
+    session = get_session()
     try:
-        session.query(Alerta).delete()
+        cid = get_or_create_cliente(session, nombre_cliente)
+        session.query(Alerta).filter_by(cliente_id=cid).delete()
         session.commit()
         return {"ok": True, "mensaje": "Alertas eliminadas"}
     finally:
         session.close()
 
 
-@app.get("/api/stats", response_model=StatsOut)
-async def stats():
-    session = _get_session()
+class PingCleanRequest(BaseModel):
+    dias: int | None = None
+    por_dispositivo: int | None = None
+
+
+@app.post("/api/pings/clean")
+async def limpiar_pings(data: PingCleanRequest, nombre_cliente: str = Query("red_cliente")):
+    session = get_session()
     try:
-        total = session.query(Dispositivo).count()
-        activos = session.query(Dispositivo).filter_by(activo=1).count()
-        alertas_pend = session.query(Alerta).filter_by(resuelta=0).count()
-        warn = session.query(Alerta).filter(Alerta.tipo == "latencia_alta", Alerta.resuelta == 0).count()
-        degradados = session.query(Alerta).filter(Alerta.tipo == "degradado", Alerta.resuelta == 0).count()
-        caidos = session.query(Alerta).filter(Alerta.tipo == "caida", Alerta.resuelta == 0).count()
-        total_pings = session.query(Ping).count()
+        cid = get_or_create_cliente(session, nombre_cliente)
+        borrados = 0
+
+        if data.dias:
+            desde = datetime.now() - timedelta(days=data.dias)
+            result = session.query(Ping).filter(
+                Ping.cliente_id == cid,
+                Ping.timestamp < desde,
+            ).delete(synchronize_session=False)
+            borrados += result
+
+        if data.por_dispositivo:
+            subq = (
+                session.query(Ping.id)
+                .filter(Ping.cliente_id == cid)
+                .order_by(Ping.dispositivo_id, Ping.timestamp.desc())
+                .offset(data.por_dispositivo)
+            )
+            ids = [r[0] for r in session.execute(subq).fetchall()]
+            if ids:
+                result = session.query(Ping).filter(Ping.id.in_(ids)).delete(synchronize_session=False)
+                borrados += result
+
+        session.commit()
+        restantes = session.query(Ping).filter_by(cliente_id=cid).count()
+        return {"ok": True, "borrados": borrados, "restantes": restantes}
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(500, f"Error limpiando pings: {str(e)}")
+    finally:
+        session.close()
+
+
+@app.get("/api/stats", response_model=StatsOut)
+async def stats(nombre_cliente: str = Query("red_cliente")):
+    session = get_session()
+    try:
+        cid = get_or_create_cliente(session, nombre_cliente)
+        total = session.query(Dispositivo).filter_by(cliente_id=cid).count()
+        activos = session.query(Dispositivo).filter_by(cliente_id=cid, activo=1).count()
+        alertas_pend = session.query(Alerta).filter_by(cliente_id=cid, resuelta=0).count()
+        warn = session.query(Alerta).filter(Alerta.cliente_id == cid, Alerta.tipo == "latencia_alta", Alerta.resuelta == 0).count()
+        degradados = session.query(Alerta).filter(Alerta.cliente_id == cid, Alerta.tipo == "degradado", Alerta.resuelta == 0).count()
+        caidos = session.query(Alerta).filter(Alerta.cliente_id == cid, Alerta.tipo == "caida", Alerta.resuelta == 0).count()
+        total_pings = session.query(Ping).filter_by(cliente_id=cid).count()
         return StatsOut(
             total_dispositivos=total,
             activos=activos,
@@ -389,18 +557,12 @@ async def stats():
 
 @app.post("/api/scan")
 async def scan_red(data: ScanRequest):
-    global DB_ACTIVA
-    # Validar que el rango no sea demasiado grande
     for r in data.rango_ip.split(","):
         r = r.strip()
         if "/" in r:
             mascara = int(r.split("/")[1])
             if mascara < 16:
                 raise HTTPException(400, f"Rango {r} demasiado grande (máscara /16 o mayor). Escanea subredes más pequeñas.")
-
-    DB_ACTIVA = get_db_path(data.nombre_cliente)
-    os.makedirs("data", exist_ok=True)
-    init_db(DB_ACTIVA)
 
     cliente = data.nombre_cliente
     tarea_existente = _scan_tasks.get(cliente)
@@ -430,19 +592,33 @@ async def scan_estado(nombre_cliente: str = "red_cliente"):
     return {"estado": "en_progreso"}
 
 
+@app.post("/api/discover")
+async def discover_nuevos(nombre_cliente: str = "red_cliente"):
+    try:
+        session = get_session()
+        cid = get_or_create_cliente(session, nombre_cliente)
+        resultado = descubrir_nuevos(session, cid)
+        return resultado
+    except Exception as e:
+        raise HTTPException(500, f"Error en descubrimiento: {str(e)}")
+    finally:
+        session.close()
+
+
 @app.post("/api/seed")
 async def seed_data(nombre_cliente: str = "demo"):
-    global DB_ACTIVA
-    DB_ACTIVA = get_db_path(nombre_cliente)
-    os.makedirs("data", exist_ok=True)
-    init_db(DB_ACTIVA)
-    session = get_session(DB_ACTIVA)()
+    init_db()
+    session = get_session()
 
     try:
-        session.query(PosicionTopologia).delete()
-        session.query(Alerta).delete()
-        session.query(Ping).delete()
-        session.query(Dispositivo).delete()
+        cid = get_or_create_cliente(session, nombre_cliente)
+
+        session.query(PosicionTopologia).filter_by(cliente_id=cid).delete()
+        session.query(Credencial).filter_by(cliente_id=cid).delete()
+        session.query(Alerta).filter_by(cliente_id=cid).delete()
+        session.query(Ping).filter_by(cliente_id=cid).delete()
+        session.query(Servicio).filter_by(cliente_id=cid).delete()
+        session.query(Dispositivo).filter_by(cliente_id=cid).delete()
 
         dispositivos = [
             {"ip": "192.168.1.1", "hostname": "router-mikrotik", "tipo": "router", "mac": "00:1B:44:11:3A:B7", "fabricante": "MikroTik", "segmento": "192.168.1.0/24"},
@@ -459,7 +635,7 @@ async def seed_data(nombre_cliente: str = "demo"):
 
         ahora = datetime.now()
         for i, d in enumerate(dispositivos):
-            disp = Dispositivo(**d, primera_vez=ahora - timedelta(days=random.randint(30, 180)))
+            disp = Dispositivo(**d, cliente_id=cid, primera_vez=ahora - timedelta(days=random.randint(30, 180)))
             session.add(disp)
             session.flush()
 
@@ -478,6 +654,7 @@ async def seed_data(nombre_cliente: str = "demo"):
 
                 session.add(Ping(
                     dispositivo_id=disp.id,
+                    cliente_id=cid,
                     timestamp=ahora - timedelta(hours=23 - h),
                     estado=estado,
                     latencia_ms=latencia,
@@ -487,6 +664,7 @@ async def seed_data(nombre_cliente: str = "demo"):
             if d["ip"] in ("192.168.2.103", "192.168.2.104"):
                 session.add(Alerta(
                     dispositivo_id=disp.id,
+                    cliente_id=cid,
                     tipo="caida",
                     mensaje=f"{d['hostname']} ha presentado caidas intermitentes en las ultimas 24h",
                     timestamp=ahora - timedelta(minutes=random.randint(5, 120)),
@@ -494,21 +672,25 @@ async def seed_data(nombre_cliente: str = "demo"):
 
             if d["tipo"] == "camara":
                 session.add(Servicio(
-                    dispositivo_id=disp.id, puerto=80, protocolo="tcp",
+                    dispositivo_id=disp.id, cliente_id=cid,
+                    puerto=80, protocolo="tcp",
                     servicio="http", version="", estado="abierto",
                 ))
                 session.add(Servicio(
-                    dispositivo_id=disp.id, puerto=554, protocolo="tcp",
+                    dispositivo_id=disp.id, cliente_id=cid,
+                    puerto=554, protocolo="tcp",
                     servicio="rtsp", version="", estado="abierto",
                 ))
             if d["tipo"] == "router":
                 session.add(Servicio(
-                    dispositivo_id=disp.id, puerto=22, protocolo="tcp",
+                    dispositivo_id=disp.id, cliente_id=cid,
+                    puerto=22, protocolo="tcp",
                     servicio="ssh", version="OpenSSH", estado="abierto",
                 ))
 
             session.add(PosicionTopologia(
                 dispositivo_id=disp.id,
+                cliente_id=cid,
                 x=random.uniform(-400, 400),
                 y=random.uniform(-300, 300),
             ))
@@ -524,12 +706,16 @@ async def seed_data(nombre_cliente: str = "demo"):
 
 
 @app.post("/api/reconciliar")
-async def reconciliar_red(x_admin_key: str = Header(None)):
+async def reconciliar_red(
+    nombre_cliente: str = Query("red_cliente"),
+    x_admin_key: str = Header(None),
+):
     if x_admin_key != ADMIN_KEY:
         raise HTTPException(403, "Clave de seguridad inválida")
-    session = _get_session()
+    session = get_session()
     try:
-        res = reconciliar_dispositivos(session)
+        cid = get_or_create_cliente(session, nombre_cliente)
+        res = reconciliar_dispositivos(session, cid)
         return {"ok": True, "corregidos_tipo": res["corregidos_tipo"], "corregidos_fab": res["corregidos_fab"]}
     except Exception as e:
         session.rollback()
@@ -540,29 +726,33 @@ async def reconciliar_red(x_admin_key: str = Header(None)):
 
 
 @app.delete("/api/red")
-async def borrar_red(x_admin_key: str = Header(None)):
+async def borrar_red(
+    x_admin_key: str = Header(None),
+    nombre_cliente: str = Query(None),
+):
     if x_admin_key != ADMIN_KEY:
         raise HTTPException(403, "Clave de seguridad inválida")
-    session = _get_session()
-    db_path = DB_ACTIVA
+
+    if not nombre_cliente:
+        raise HTTPException(400, "Se requiere nombre_cliente")
+
+    session = get_session()
     try:
-        session.query(PosicionTopologia).delete()
-        session.query(Credencial).delete()
-        session.query(Alerta).delete()
-        session.query(Ping).delete()
-        session.query(Servicio).delete()
-        session.query(Dispositivo).delete()
+        cliente = session.query(Cliente).filter_by(nombre=nombre_cliente).first()
+        if not cliente:
+            raise HTTPException(404, f"Red '{nombre_cliente}' no encontrada")
+        session.delete(cliente)
         session.commit()
-        session.close()
-        if os.path.exists(db_path):
-            os.remove(db_path)
-            logger.warning(f"Archivo eliminado: {db_path}")
-        return {"ok": True, "mensaje": "Red eliminada completamente"}
+        return {"ok": True, "mensaje": f"Red '{nombre_cliente}' eliminada completamente (cascada nativa)"}
+    except HTTPException:
+        session.rollback()
+        raise
     except Exception as e:
         session.rollback()
+        logger.error(f"Error borrando datos de {nombre_cliente}: {e}")
+        raise HTTPException(500, f"Error al borrar datos: {str(e)}")
+    finally:
         session.close()
-        logger.error(f"Error borrando red: {e}")
-        raise HTTPException(500, f"Error: {str(e)}")
 
 
 def _ejecutar_speedtest(task_id: str):
@@ -621,32 +811,17 @@ async def poll_manual(nombre_cliente: str = "red_cliente"):
 
 @app.get("/api/clientes")
 async def listar_clientes():
-    import glob
-    archivos = glob.glob(f"data/*.db")
-    clientes = [os.path.splitext(os.path.basename(a))[0] for a in archivos]
-    return {"clientes": clientes, "activo": os.path.splitext(os.path.basename(DB_ACTIVA))[0]}
-
-
-@app.post("/api/clientes/switch")
-async def cambiar_cliente(data: ClienteSwitch):
-    global DB_ACTIVA
-    nueva_ruta = get_db_path(data.nombre_cliente)
-    if not os.path.exists(nueva_ruta):
-        os.makedirs("data", exist_ok=True)
-        init_db(nueva_ruta)
-    DB_ACTIVA = nueva_ruta
-    init_db(DB_ACTIVA)
-    return {"ok": True, "cliente": data.nombre_cliente, "db": DB_ACTIVA}
+    session = get_session()
+    try:
+        clientes = session.query(Cliente).order_by(Cliente.nombre).all()
+        return {"clientes": [c.nombre for c in clientes]}
+    finally:
+        session.close()
 
 
 @app.post("/api/chat")
 async def chat_endpoint(data: ChatRequest):
-    global DB_ACTIVA
-    db_path = get_db_path(data.nombre_cliente)
-    if not os.path.exists(db_path):
-        raise HTTPException(404, "Base de datos del cliente no encontrada")
-    init_db(db_path)
-    session = get_session(db_path)()
+    session = get_session()
     try:
         respuesta = preguntar(data.pregunta, session)
         return {"respuesta": respuesta}
@@ -675,13 +850,15 @@ async def generar_reporte_endpoint(nombre_cliente: str = "red_cliente", formato:
 
 
 @app.get("/api/topologia")
-async def obtener_topologia():
-    session = _get_session()
+async def obtener_topologia(nombre_cliente: str = Query("red_cliente")):
+    session = get_session()
     try:
-        dispositivos = session.query(Dispositivo).filter_by(activo=1).all()
+        cid = get_or_create_cliente(session, nombre_cliente)
+        dispositivos = session.query(Dispositivo).filter_by(cliente_id=cid, activo=1).all()
+        ids = [d.id for d in dispositivos]
         posiciones = {
             p.dispositivo_id: (p.x, p.y)
-            for p in session.query(PosicionTopologia).all()
+            for p in session.query(PosicionTopologia).filter(PosicionTopologia.dispositivo_id.in_(ids)).all()
         }
 
         cred_sub = (
@@ -689,12 +866,12 @@ async def obtener_topologia():
                 Credencial.dispositivo_id,
                 Credencial.alias,
             )
+            .filter(Credencial.dispositivo_id.in_(ids))
             .distinct(Credencial.dispositivo_id)
             .subquery()
         )
         cred_map = {r.dispositivo_id: r.alias for r in session.query(cred_sub).all()}
 
-        import math
         nodos = []
         for i, d in enumerate(dispositivos):
             ultimo_ping = (
@@ -720,7 +897,7 @@ async def obtener_topologia():
                 radio = 250
                 x = math.cos(angulo) * radio
                 y = math.sin(angulo) * radio
-                session.add(PosicionTopologia(dispositivo_id=d.id, x=x, y=y))
+                session.add(PosicionTopologia(dispositivo_id=d.id, cliente_id=cid, x=x, y=y))
 
             nodos.append({
                 "id": d.id,
@@ -778,10 +955,21 @@ async def obtener_topologia():
 
 
 @app.post("/api/topologia/posiciones")
-async def guardar_posiciones(posiciones: list[PosicionUpdate]):
-    session = _get_session()
+async def guardar_posiciones(
+    posiciones: list[PosicionUpdate],
+    nombre_cliente: str = Query("red_cliente"),
+):
+    session = get_session()
     try:
+        cid = get_or_create_cliente(session, nombre_cliente)
         for p in posiciones:
+            disp = (
+                session.query(Dispositivo)
+                .filter_by(id=p.dispositivo_id, cliente_id=cid)
+                .first()
+            )
+            if not disp:
+                continue
             existente = session.query(PosicionTopologia).filter_by(
                 dispositivo_id=p.dispositivo_id
             ).first()
@@ -791,6 +979,7 @@ async def guardar_posiciones(posiciones: list[PosicionUpdate]):
             else:
                 session.add(PosicionTopologia(
                     dispositivo_id=p.dispositivo_id,
+                    cliente_id=cid,
                     x=p.x,
                     y=p.y,
                 ))

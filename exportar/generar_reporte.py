@@ -6,8 +6,8 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
 from sqlalchemy.orm import Session
 
-from backend.database import init_db, get_session
-from backend.models import Dispositivo, Ping, Alerta
+from backend.database import init_db, get_session, get_or_create_cliente
+from backend.models import Dispositivo, Ping, Alerta, Credencial
 from backend.ia_bridge import generate_report_summary
 
 logger = logging.getLogger("vigia.reporte")
@@ -15,8 +15,8 @@ logger = logging.getLogger("vigia.reporte")
 REPORTES_DIR = "reportes"
 
 
-def _colectar_datos(session: Session, nombre_cliente: str = "") -> dict:
-    dispositivos = session.query(Dispositivo).order_by(Dispositivo.ip).all()
+def _colectar_datos(session: Session, nombre_cliente: str = "", cid: int = 0) -> dict:
+    dispositivos = session.query(Dispositivo).filter_by(cliente_id=cid).order_by(Dispositivo.ip).all()
 
     total = len(dispositivos)
     activos = 0
@@ -45,6 +45,8 @@ def _colectar_datos(session: Session, nombre_cliente: str = "") -> dict:
             .all()
         )
 
+        cred = session.query(Credencial).filter_by(dispositivo_id=d.id).first()
+
         if estado == "up":
             activos += 1
         elif estado in ("down", "timeout"):
@@ -57,6 +59,11 @@ def _colectar_datos(session: Session, nombre_cliente: str = "") -> dict:
             "serial": d.serial or "—",
             "tipo": d.tipo or "desconocido",
             "fabricante": d.fabricante or "—",
+            "alias": cred.alias if cred else "—",
+            "usuario": cred.usuario if cred else "—",
+            "admin_pass": cred.admin_pass if cred else "—",
+            "app_pass": cred.app_pass if cred else "—",
+            "observacion": cred.observacion if cred else "—",
             "estado": estado,
             "latencia": latencia,
             "ultima_vez": d.ultima_vez,
@@ -72,7 +79,7 @@ def _colectar_datos(session: Session, nombre_cliente: str = "") -> dict:
 
     alertas_pendientes = (
         session.query(Alerta)
-        .filter_by(resuelta=0)
+        .filter_by(resuelta=0, cliente_id=cid)
         .order_by(Alerta.timestamp.desc())
         .limit(50)
         .all()
@@ -98,7 +105,7 @@ def _colectar_datos(session: Session, nombre_cliente: str = "") -> dict:
     return {
         "cliente": nombre_cliente,
         "fecha": datetime.now().strftime("%Y-%m-%d %H:%M"),
-        "tecnico": "",
+        "tecnico": "Alejandro Montenegro",
         "total_dispositivos": total,
         "activos": activos,
         "caidos": caidos,
@@ -109,15 +116,12 @@ def _colectar_datos(session: Session, nombre_cliente: str = "") -> dict:
 
 
 def generar_html(nombre_cliente: str) -> str:
-    db_path = f"data/{nombre_cliente}.db"
-    if not os.path.exists(db_path):
-        raise FileNotFoundError(f"Base de datos no encontrada: {db_path}")
-
-    init_db(db_path)
-    session = get_session(db_path)()
+    init_db()
+    session = get_session()
+    cid = get_or_create_cliente(session, nombre_cliente)
 
     try:
-        datos = _colectar_datos(session, nombre_cliente)
+        datos = _colectar_datos(session, nombre_cliente, cid)
 
         template_dir = Path(__file__).resolve().parent.parent / "frontend"
         env = Environment(loader=FileSystemLoader(str(template_dir)))
@@ -137,15 +141,12 @@ def generar_html(nombre_cliente: str) -> str:
 
 
 def generar_txt(nombre_cliente: str) -> str:
-    db_path = f"data/{nombre_cliente}.db"
-    if not os.path.exists(db_path):
-        raise FileNotFoundError(f"Base de datos no encontrada: {db_path}")
-
-    init_db(db_path)
-    session = get_session(db_path)()
+    init_db()
+    session = get_session()
+    cid = get_or_create_cliente(session, nombre_cliente)
 
     try:
-        datos = _colectar_datos(session, nombre_cliente)
+        datos = _colectar_datos(session, nombre_cliente, cid)
         lineas = []
         lineas.append("=" * 60)
         lineas.append(f"  VigIA - Reporte de Red")
@@ -165,14 +166,14 @@ def generar_txt(nombre_cliente: str) -> str:
             lineas.append(f"  {datos['resumen_ia']}")
             lineas.append("")
 
-        lineas.append("-" * 60)
+        lineas.append("-" * 120)
         lineas.append("Dispositivos:")
-        lineas.append("-" * 60)
-        lineas.append(f"{'IP':<16} {'Hostname':<20} {'MAC':<18} {'Serial':<16} {'Fabricante':<14} {'Tipo':<14} {'Estado':<10} {'Latencia':<10}")
-        lineas.append("-" * 60)
+        lineas.append("-" * 120)
+        lineas.append(f"{'IP':<16} {'Hostname':<16} {'MAC':<18} {'Alias':<14} {'Usuario':<14} {'Clave Admin':<14} {'Clave App':<14} {'Estado':<10} {'Latencia':<8}")
+        lineas.append("-" * 120)
         for d in datos["items"]:
             lat = f"{d['latencia']:.0f}ms" if d["latencia"] is not None else "—"
-            lineas.append(f"{d['ip']:<16} {d['hostname']:<20} {d['mac']:<18} {d['serial']:<16} {d['fabricante']:<14} {d['tipo']:<14} {d['estado']:<10} {lat:<10}")
+            lineas.append(f"{d['ip']:<16} {d['hostname']:<16} {d['mac']:<18} {d['alias']:<14} {d['usuario']:<14} {d['admin_pass']:<14} {d['app_pass']:<14} {d['estado']:<10} {lat:<8}")
         lineas.append("")
 
         if datos["alertas"]:

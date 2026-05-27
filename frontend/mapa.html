@@ -4,9 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VigIA — Mapa Topológico</title>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.9/dist/vis-network.min.js"></script>
-<link href="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.9/dist/dist/vis-network.min.css" rel="stylesheet">
+<script src="http://localhost:8080/static/vendor/vis-network.min.js"></script>
+    <link href="http://localhost:8080/static/vendor/vis-network.min.css" rel="stylesheet">
 <style>
   :root {
     --bg:        #0a0a0f;
@@ -22,7 +21,7 @@
     --degradado: #d97917;
     --down:      #e84848;
     --border:    #18182a;
-    --font:      'JetBrains Mono', monospace;
+    --font:      'Consolas', 'Monaco', 'Courier New', monospace;
     --radius:    6px;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -191,6 +190,7 @@
   .panel-actions .btn { font-size: 9px; padding: 3px 8px; }
   .no-select { color: var(--muted); font-style: italic; padding: 20px; text-align: center; font-size: 11px; }
   .count { color: var(--muted); font-size: 9px; }
+  #errorMsg { display:none; position:fixed; top:60px; left:50%; transform:translateX(-50%); z-index:999; background:#2a0f0f; border:1px solid #e84848; color:#e84848; padding:8px 16px; border-radius:6px; font-size:11px; max-width:80%; text-align:center; }
 </style>
 </head>
 <body>
@@ -345,10 +345,17 @@ if (window.location.port === '' || window.location.port === '80' || window.locat
 
 async function sincronizarCliente() {
   try {
-    var res = await apiFetch('/api/clientes');
-    var activo = res.activo || 'red_cliente';
-    document.getElementById('clienteBadge').dataset.cliente = activo;
-    document.getElementById('clienteNombre').textContent = activo;
+    var res = await apiFetch('/api/clientes', { sinCliente: true });
+    var actual = document.getElementById('clienteBadge').dataset.cliente;
+    if (res.clientes.length > 0) {
+      if (!actual) {
+        document.getElementById('clienteBadge').dataset.cliente = res.clientes[0];
+        document.getElementById('clienteNombre').textContent = res.clientes[0];
+      } else if (!res.clientes.includes(actual)) {
+        document.getElementById('clienteBadge').dataset.cliente = res.clientes[0];
+        document.getElementById('clienteNombre').textContent = res.clientes[0];
+      }
+    }
   } catch (_) {}
 }
 
@@ -435,9 +442,30 @@ var ESTADO_LABEL = {
 
 function apiFetch(url, opts) {
   opts = opts || {};
-  return fetch(API_BASE + url, {
-    headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
-    ...opts,
+  var optsHeaders = opts.headers;
+  var fetchOpts = {};
+  var sinCliente = false;
+  for (var k in opts) {
+    if (k === 'sinCliente') sinCliente = !!opts[k];
+    else if (k !== 'headers') fetchOpts[k] = opts[k];
+  }
+  var finalUrl = url;
+  if (!sinCliente) {
+    var c = document.getElementById('clienteBadge').dataset.cliente;
+    if (!c) {
+      return new Promise(function(resolve) {
+        if (url.indexOf('/topologia') >= 0) resolve({nodos:[], enlaces:[]});
+        else if (url.indexOf('/stats') >= 0) resolve({total_dispositivos:0,activos:0,warn:0,degradados:0,caidos:0,alertas_pendientes:0,total_pings:0});
+        else if (url.indexOf('/poll') >= 0) resolve({});
+        else resolve([]);
+      });
+    }
+    var sep = url.indexOf('?') >= 0 ? '&' : '?';
+    finalUrl = url + sep + 'nombre_cliente=' + encodeURIComponent(c);
+  }
+  return fetch(API_BASE + finalUrl, {
+    headers: { 'Content-Type': 'application/json', ...(optsHeaders || {}) },
+    ...fetchOpts,
   }).then(function(r) {
     if (!r.ok) throw new Error('HTTP ' + r.status);
     return r.json();
@@ -470,8 +498,15 @@ function sizeFromTipo(tipo) {
 }
 
 // ── Load topology ──
-async function cargarTopologia() {
+async function cargarTopologia(autoPoll) {
   await sincronizarCliente();
+  var c = document.getElementById('clienteBadge').dataset.cliente;
+  if (!c) {
+    nodosData = [];
+    enlacesData = [];
+    if (network) { network.setData({nodes:[], edges:[]}); }
+    return;
+  }
   try {
     var data = await apiFetch('/api/topologia');
     nodosData = data.nodos || [];
@@ -569,6 +604,12 @@ async function cargarTopologia() {
 
     aplicarFiltros();
     actualizarContador();
+    if (autoPoll && !pollActivo && c) {
+      try {
+        await apiFetch('/api/poll');
+      } catch (_) {}
+      cargarTopologia();
+    }
   } catch (e) {
     console.error('Error cargando topologia:', e);
   }
@@ -757,8 +798,7 @@ function mostrarPing(nodeId) {
   }
   statusEl.innerHTML = '⏳ Pinging <strong>' + nodo.ip + '</strong>...';
 
-  var cliente = document.getElementById('clienteBadge').dataset.cliente || 'red_cliente';
-  apiFetch('/api/poll?nombre_cliente=' + encodeURIComponent(cliente)).then(function() {
+  apiFetch('/api/poll').then(function() {
     return apiFetch('/api/dispositivos/con-estado');
   }).then(function(devices) {
     var d = devices.find(function(x) { return x.id === nodeId; });
@@ -858,9 +898,9 @@ function speedtestM() {
   btn.textContent = '⌛';
   sp.style.display = 'inline';
   sp.textContent = '⌛ Midiendo...';
-  apiFetch('/api/speedtest', { method: 'POST' }).then(function(data) {
-    var poll = setInterval(function() {
-      apiFetch('/api/speedtest/estado/' + data.task_id).then(function(res) {
+  apiFetch('/api/speedtest', { sinCliente: true, method: 'POST' }).then(function(data) {
+    var pollId = setInterval(function() {
+      apiFetch('/api/speedtest/estado/' + data.task_id, { sinCliente: true }).then(function(res) {
         if (res.estado === 'completo') {
           clearInterval(poll);
           sp.innerHTML = '⬇ ' + res.download_mbps + ' <span style=\"color:var(--muted);\">|</span> ⬆ ' + res.upload_mbps + ' <span style=\"color:var(--muted);\">|</span> ⏱ ' + res.ping_ms + ' ms <span style=\"color:var(--muted);font-size:8px;\">' + res.servidor + '</span>';
@@ -906,14 +946,27 @@ function borrarRedM() {
     headers: { 'X-Admin-Key': clave },
   }).then(function(res) {
     alert(res.mensaje);
-    cargarTopologia();
+    document.getElementById('clienteBadge').dataset.cliente = '';
+    document.getElementById('clienteNombre').textContent = '—';
+    nodosData = [];
+    enlacesData = [];
+    if (network) network.setData({nodes:[], edges:[]});
   }).catch(function(e) {
     alert(e.message.includes('403') ? 'Clave incorrecta' : 'Error: ' + e.message);
   });
 }
 
+<div id="errorMsg"></div>
 // ── Init ──
-cargarTopologia();
+(function(){
+  try {
+    if (typeof vis === 'undefined') throw new Error('vis-network no cargó');
+    cargarTopologia(true);
+  } catch(e) {
+    var el = document.getElementById('errorMsg');
+    if (el) { el.style.display = 'block'; el.textContent = '⚠ Error: ' + e.message; }
+  }
+})();
 </script>
 </body>
 </html>

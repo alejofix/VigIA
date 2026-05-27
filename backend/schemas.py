@@ -16,6 +16,7 @@ class DispositivoCreate(BaseModel):
 class DispositivoOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    cliente_id: int
     ip: str
     hostname: Optional[str] = None
     mac: Optional[str] = None
@@ -33,6 +34,7 @@ class DispositivoOut(BaseModel):
 class PingOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    cliente_id: int
     dispositivo_id: int
     timestamp: datetime
     estado: str
@@ -43,6 +45,7 @@ class PingOut(BaseModel):
 class ServicioOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    cliente_id: int
     dispositivo_id: int
     puerto: int
     protocolo: Optional[str] = None
@@ -54,6 +57,7 @@ class ServicioOut(BaseModel):
 class AlertaOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    cliente_id: int
     dispositivo_id: int
     tipo: str
     mensaje: Optional[str] = None
@@ -91,10 +95,6 @@ class ChatRequest(BaseModel):
 class NotificacionRequest(BaseModel):
     asunto: str
     cuerpo: str
-
-
-class ClienteSwitch(BaseModel):
-    nombre_cliente: str
 
 
 class DispositivoConEstado(DispositivoOut):

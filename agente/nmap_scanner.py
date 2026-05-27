@@ -7,7 +7,7 @@ import nmap
 from datetime import datetime
 from sqlalchemy.orm import Session
 from backend.models import Dispositivo, Servicio, PosicionTopologia
-from backend.database import get_session, init_db
+from backend.database import get_session, init_db, get_or_create_cliente
 try:
     from agente.snmp_reader import obtener_info_dispositivo
     _SNMP_DISPONIBLE = True
@@ -683,10 +683,10 @@ def _escáner_un_rango(nm, rango: str, timeout: int) -> list[dict]:
     return hosts
 
 
-def _agregar_o_actualizar(session, ip, hostname, mac, fabricante, tipo, servicios, serial_snmp, descripcion_snmp):
+def _agregar_o_actualizar(session, ip, hostname, mac, fabricante, tipo, servicios, serial_snmp, descripcion_snmp, cid):
     octetos = ip.split(".")
     segmento_ip = f"{octetos[0]}.{octetos[1]}.{octetos[2]}.0/24" if len(octetos) == 4 else ""
-    existente = session.query(Dispositivo).filter_by(ip=ip).first()
+    existente = session.query(Dispositivo).filter_by(ip=ip, cliente_id=cid).first()
     if existente:
         existente.hostname = hostname or existente.hostname
         existente.mac = mac or existente.mac
@@ -707,7 +707,7 @@ def _agregar_o_actualizar(session, ip, hostname, mac, fabricante, tipo, servicio
             ip=ip, hostname=hostname, mac=mac, fabricante=fabricante,
             tipo=tipo, segmento=segmento_ip, serial=serial_snmp,
             descripcion=descripcion_snmp or "",
-            ultima_vez=datetime.now(),
+            ultima_vez=datetime.now(), cliente_id=cid,
         )
         session.add(dispositivo_db)
         actualizado = False
@@ -717,7 +717,7 @@ def _agregar_o_actualizar(session, ip, hostname, mac, fabricante, tipo, servicio
         angulo = random.uniform(0, 2 * math.pi)
         radio = random.uniform(80, 350)
         session.add(PosicionTopologia(
-            dispositivo_id=dispositivo_db.id,
+            dispositivo_id=dispositivo_db.id, cliente_id=cid,
             x=math.cos(angulo) * radio,
             y=math.sin(angulo) * radio,
         ))
@@ -727,7 +727,7 @@ def _agregar_o_actualizar(session, ip, hostname, mac, fabricante, tipo, servicio
         ).first()
         if not serv_existente:
             session.add(Servicio(
-                dispositivo_id=dispositivo_db.id,
+                dispositivo_id=dispositivo_db.id, cliente_id=cid,
                 puerto=s["puerto"], protocolo=s["protocolo"],
                 servicio=s["servicio"], version=s["version"], estado=s["estado"],
             ))
@@ -735,10 +735,9 @@ def _agregar_o_actualizar(session, ip, hostname, mac, fabricante, tipo, servicio
 
 
 def escanear(rango_ip: str, nombre_cliente: str, timeout: int = 300) -> dict:
-    db_path = f"data/{nombre_cliente}.db"
-    init_db(db_path)
-    session_factory = get_session(db_path)
-    session: Session = session_factory()
+    init_db()
+    session: Session = get_session()
+    cid = get_or_create_cliente(session, nombre_cliente)
 
     try:
         nm = nmap.PortScanner()
@@ -763,10 +762,10 @@ def escanear(rango_ip: str, nombre_cliente: str, timeout: int = 300) -> dict:
             info = hosts_info_dict.get(ip, {})
             mac = info.get("mac", "") or _mac_arp(ip) or _mac_local(ip)
             fabricante = info.get("fabricante", "") or detectar_fabricante(mac, info.get("vendor", ""))
-            tipo_inicial = "dispositivo" if not session.query(Dispositivo).filter_by(ip=ip).first() else ""
+            tipo_inicial = "dispositivo" if not session.query(Dispositivo).filter_by(ip=ip, cliente_id=cid).first() else ""
             disp, upd = _agregar_o_actualizar(
                 session, ip, "", mac, fabricante,
-                tipo_inicial, [], None, None,
+                tipo_inicial, [], None, None, cid,
             )
             if not upd:
                 nuevos += 1
@@ -864,7 +863,7 @@ def escanear(rango_ip: str, nombre_cliente: str, timeout: int = 300) -> dict:
             _agregar_o_actualizar(
                 session, ip, hostname, mac, fabricante,
                 tipo, puertos_abiertos,
-                serial_snmp, desc_snmp,
+                serial_snmp, desc_snmp, cid,
             )
 
             for r in resultados:
@@ -892,11 +891,64 @@ def escanear(rango_ip: str, nombre_cliente: str, timeout: int = 300) -> dict:
         session.close()
 
 
-def reconciliar_dispositivos(session: Session) -> dict:
+def descubrir_nuevos(session, cid: int) -> dict:
+    """Descubre equipos nuevos en las subredes conocidas usando nmap -sn (ARP ping sweep).
+    No escanea puertos ni hace detección de SO, solo descubre IPs activas."""
+    segmentos = (
+        session.query(Dispositivo.segmento)
+        .filter_by(cliente_id=cid)
+        .filter(Dispositivo.segmento.isnot(None))
+        .distinct()
+        .all()
+    )
+    segmentos = sorted(set(r[0] for r in segmentos if r[0]))
+    if not segmentos:
+        logger.warning("No hay segmentos conocidos para descubrir nuevos equipos")
+        return {"nuevos": 0, "total": 0, "hosts": []}
+
+    nm = nmap.PortScanner()
+    ips_existentes = {d.ip for d in session.query(Dispositivo.ip).filter_by(cliente_id=cid).all()}
+    nuevos = 0
+    resultados = []
+
+    for seg in segmentos:
+        try:
+            iface = _iface_red()
+            args = f"-sn -n -T4 --max-retries 3 -e {iface}" if iface else "-sn -n -T4 --max-retries 3"
+            nm.scan(hosts=seg, arguments=args)
+            for ip in nm.all_hosts():
+                if ip in ips_existentes:
+                    continue
+                mac = ""
+                vendor = ""
+                if "addresses" in nm[ip]:
+                    mac = nm[ip]["addresses"].get("mac", "")
+                if "vendor" in nm[ip] and mac in nm[ip]["vendor"]:
+                    vendor = nm[ip]["vendor"][mac]
+                fabricante = detectar_fabricante(mac, vendor)
+                disp, upd = _agregar_o_actualizar(
+                    session, ip, "", mac, fabricante,
+                    "dispositivo", [], None, None, cid,
+                )
+                if not upd:
+                    nuevos += 1
+                resultados.append({"ip": ip, "mac": mac, "fabricante": fabricante, "nuevo": not upd})
+                ips_existentes.add(ip)
+        except Exception as e:
+            logger.warning(f"Error escaneando segmento {seg}: {e}")
+            continue
+
+    if nuevos:
+        session.commit()
+        logger.info(f"Descubrimiento: {nuevos} nuevos equipos en {len(segmentos)} segmentos")
+    return {"nuevos": nuevos, "total": len(resultados), "hosts": resultados}
+
+
+def reconciliar_dispositivos(session: Session, cid: int = 0) -> dict:
     """Re-evalúa tipo y fabricante de todos los dispositivos activos
     usando hostname + servicios + MAC. Corre automático en cada ciclo
     de polling y al iniciar la app."""
-    dispositivos = session.query(Dispositivo).filter_by(activo=1).all()
+    dispositivos = session.query(Dispositivo).filter_by(activo=1, cliente_id=cid).all()
     corregidos_tipo = 0
     corregidos_fab = 0
     for d in dispositivos:
@@ -951,3 +1003,56 @@ def reconciliar_dispositivos(session: Session) -> dict:
         session.commit()
         logger.info(f"Reconciliación: {corregidos_tipo} tipos, {corregidos_fab} fabricantes corregidos")
     return {"corregidos_tipo": corregidos_tipo, "corregidos_fab": corregidos_fab}
+
+
+def escanear_puertos(dispositivo_id: int, nombre_cliente: str) -> list[dict]:
+    init_db()
+    session: Session = get_session()
+    cid = get_or_create_cliente(session, nombre_cliente)
+    try:
+        disp = session.query(Dispositivo).filter_by(id=dispositivo_id, cliente_id=cid).first()
+        if not disp:
+            raise ValueError("Dispositivo no encontrado")
+
+        nm = nmap.PortScanner()
+        try:
+            nm.scan(hosts=disp.ip, arguments="-sV -T4 --version-intensity 2 --top-ports 200 --host-timeout 90s")
+        except Exception:
+            try:
+                nm.scan(hosts=disp.ip, arguments="-sT -sV -T4 --version-intensity 2 --top-ports 200 --host-timeout 90s")
+            except Exception:
+                return []
+
+        if disp.ip not in nm.all_hosts():
+            return []
+
+        host_data = nm[disp.ip]
+        puertos_detectados = []
+
+        if "tcp" in host_data:
+            for puerto, p_info in host_data["tcp"].items():
+                if p_info.get("state") == "open":
+                    puertos_detectados.append({
+                        "puerto": puerto, "protocolo": "tcp",
+                        "servicio": p_info.get("name", ""),
+                        "version": p_info.get("version", ""),
+                        "estado": "open",
+                    })
+
+        session.query(Servicio).filter_by(dispositivo_id=disp.id).delete()
+        for p in puertos_detectados:
+            session.add(Servicio(
+                dispositivo_id=disp.id, cliente_id=cid,
+                puerto=p["puerto"], protocolo=p["protocolo"],
+                servicio=p["servicio"], version=p["version"], estado=p["estado"],
+            ))
+
+        session.commit()
+        return puertos_detectados
+
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Error escaneando puertos de {disp.ip if disp else dispositivo_id}: {e}")
+        raise
+    finally:
+        session.close()

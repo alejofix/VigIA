@@ -6,9 +6,8 @@ import re
 from datetime import datetime
 from sqlalchemy.orm import Session
 from backend.models import Dispositivo, Ping, Alerta
-from backend.database import get_session, init_db
+from backend.database import get_session, init_db, get_or_create_cliente
 from backend.notificaciones import notificar
-from agente.nmap_scanner import reconciliar_dispositivos
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -88,7 +87,7 @@ def _alerta_pendiente(session, dispositivo_id: int, tipo: str) -> bool:
     ).first() is not None
 
 
-def procesar_dispositivo(session: Session, dispositivo: Dispositivo):
+def procesar_dispositivo(session: Session, dispositivo: Dispositivo, cid: int):
     resultado = hacer_ping(dispositivo.ip)
     estado_anterior = obtener_ultimo_estado(session, dispositivo.id)
 
@@ -104,6 +103,7 @@ def procesar_dispositivo(session: Session, dispositivo: Dispositivo):
 
     ping = Ping(
         dispositivo_id=dispositivo.id,
+        cliente_id=cid,
         estado=resultado["estado"],
         latencia_ms=resultado["latencia_ms"],
         perdida_pct=resultado["perdida_pct"],
@@ -115,6 +115,7 @@ def procesar_dispositivo(session: Session, dispositivo: Dispositivo):
         if debe_alertar or not _alerta_pendiente(session, dispositivo.id, "caida"):
             alerta = Alerta(
                 dispositivo_id=dispositivo.id,
+                cliente_id=cid,
                 tipo="caida",
                 mensaje=f"Dispositivo {dispositivo.ip} caido tras estar activo",
             )
@@ -129,6 +130,7 @@ def procesar_dispositivo(session: Session, dispositivo: Dispositivo):
         if debe_alertar or not _alerta_pendiente(session, dispositivo.id, "degradado"):
             alerta = Alerta(
                 dispositivo_id=dispositivo.id,
+                cliente_id=cid,
                 tipo="degradado",
                 mensaje=f"Dispositivo {dispositivo.ip} degradado: perdida {resultado['perdida_pct']:.0f}%, latencia {resultado['latencia_ms']:.0f}ms",
             )
@@ -143,6 +145,7 @@ def procesar_dispositivo(session: Session, dispositivo: Dispositivo):
         if debe_alertar or not _alerta_pendiente(session, dispositivo.id, "latencia_alta"):
             alerta = Alerta(
                 dispositivo_id=dispositivo.id,
+                cliente_id=cid,
                 tipo="latencia_alta",
                 mensaje=f"Latencia alta en {dispositivo.ip}: {resultado['latencia_ms']:.0f}ms",
             )
@@ -152,14 +155,14 @@ def procesar_dispositivo(session: Session, dispositivo: Dispositivo):
     dispositivo.ultima_vez = datetime.now()
 
 
-def _descubrir_por_arp(session: Session):
+def _descubrir_por_arp(session: Session, cid: int):
     try:
         arp = _leer_tabla_arp()
-        existentes = {d.mac.lower() for d in session.query(Dispositivo).all() if d.mac}
+        existentes = {d.mac.lower() for d in session.query(Dispositivo).filter_by(cliente_id=cid).all() if d.mac}
         local_ip = _ip_local()
         for mac, ip in arp.items():
             if mac not in existentes and ip != local_ip and not ip.startswith("172.17.") and not ip.startswith("172.18."):
-                nuevo = Dispositivo(ip=ip, mac=mac, tipo="dispositivo", activo=1)
+                nuevo = Dispositivo(ip=ip, mac=mac, tipo="dispositivo", activo=1, cliente_id=cid)
                 session.add(nuevo)
                 logger.info(f"Nuevo dispositivo descubierto por ARP: {ip} ({mac})")
     except Exception as e:
@@ -177,30 +180,20 @@ def _ip_local() -> str:
 
 
 def ciclo_polling(nombre_cliente: str, intervalo: int = POLL_INTERVAL):
-    db_path = f"data/{nombre_cliente}.db"
-    if not os.path.exists(db_path):
-        logger.error(f"Base de datos no encontrada: {db_path}")
-        return
-
-    init_db(db_path)
-    session_factory = get_session(db_path)
-    session: Session = session_factory()
+    init_db()
+    session: Session = get_session()
+    cid = get_or_create_cliente(session, nombre_cliente)
 
     try:
-        try:
-            reconciliar_dispositivos(session)
-        except Exception as e:
-            logger.warning(f"Reconciliación falló (continúa polling): {e}")
-            session.rollback()
-        _descubrir_por_arp(session)
-        dispositivos = session.query(Dispositivo).filter_by(activo=1).all()
+        _descubrir_por_arp(session, cid)
+        dispositivos = session.query(Dispositivo).filter_by(activo=1, cliente_id=cid).all()
         if not dispositivos:
             logger.info("No hay dispositivos activos para monitorear")
             return
 
         logger.info(f"Polling ICMP: {len(dispositivos)} dispositivos")
         for dispositivo in dispositivos:
-            procesar_dispositivo(session, dispositivo)
+            procesar_dispositivo(session, dispositivo, cid)
 
         session.commit()
     except Exception as e:

@@ -176,11 +176,14 @@
     background: transparent; border: 1px solid var(--border); color: var(--muted);
     padding: 5px 12px; border-radius: var(--radius); font-family: var(--font);
     font-size: 10px; cursor: pointer; transition: all 0.2s; letter-spacing: 0.02em;
+    text-decoration: none;
   }
+  a.btn { color: var(--muted); }
   .btn:hover { border-color: rgba(0,200,212,0.25); color: var(--teal); background: rgba(0,200,212,0.03); }
   .btn-primary { background: rgba(0,200,212,0.06); border-color: rgba(0,200,212,0.15); color: var(--teal); }
   .btn-primary:hover { background: rgba(0,200,212,0.12); border-color: rgba(0,200,212,0.25); }
   .btn-sm { padding: 2px 6px; font-size: 12px; line-height: 1; }
+  .btn-mapa { background: rgba(0,200,212,0.1); border-color: rgba(0,200,212,0.25); color: var(--teal); font-size:11px; padding:5px 16px; font-weight:500; }
   .contador { color: var(--muted); font-size: 10px; margin-left: auto; }
   @keyframes refreshPulse { 0%{opacity:1;} 50%{opacity:0.5;} 100%{opacity:1;} }
   .refreshing #tablaBody { animation: refreshPulse 0.4s ease; }
@@ -291,12 +294,14 @@
             <option value="20">20s</option>
             <option value="30" selected>30s</option>
           </select>
+          <button class="btn" onclick="buscarNuevos()">🔍 Buscar nuevos</button>
           <button class="btn" onclick="cargarDatos()">↻ Reload</button>
           <button class="btn" onclick="generarReporte('html')">📄 HTML</button>
           <button class="btn" onclick="generarReporte('txt')">📃 TXT</button>
           <button class="btn" onclick="reconciliarRed()">♻ Reconciliar</button>
+          <button class="btn" onclick="mostrarModalCleanPings()">🧹 Limpiar pings</button>
           <button class="btn" onclick="borrarRed()" style="color:var(--down);border-color:rgba(232,72,72,0.2);">✖ Borrar Red</button>
-          <a href="/mapa" class="btn" target="_blank">🗺 Map</a>
+          <a href="http://localhost:8080/mapa" class="btn btn-mapa">🗺 Mapa</a>
           <span class="contador" id="contador">—</span>
         </div>
 
@@ -361,6 +366,32 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="modalCleanPings">
+    <div class="modal" style="width:400px;">
+      <h3>🧹 Limpiar historial de pings</h3>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:12px;">Los pings acumulados pueden ralentizar las consultas. Elegí cómo limpiar:</p>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;">
+          <input type="radio" name="cleanMode" value="dias" checked onchange="toggleCleanMode()">
+          Borrar pings mayores a
+          <input id="inputCleanDias" type="number" value="30" min="1" style="width:60px;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:var(--radius);font-size:12px;text-align:center;">
+          días
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;">
+          <input type="radio" name="cleanMode" value="por_dispositivo" onchange="toggleCleanMode()">
+          Mantener solo los últimos
+          <input id="inputCleanPorDisp" type="number" value="1000" min="1" disabled style="width:70px;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:var(--radius);font-size:12px;text-align:center;">
+          pings por dispositivo
+        </label>
+      </div>
+      <div id="cleanPingInfo" style="font-size:11px;color:var(--muted);margin-top:10px;"></div>
+      <div class="modal-btns" style="margin-top:14px;">
+        <button class="btn" onclick="cerrarModalCleanPings()">Cancelar</button>
+        <button class="btn btn-primary" onclick="ejecutarCleanPings()" style="background:var(--down);border-color:var(--down);">Limpiar</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="modalCliente">
     <div class="modal">
       <h3>Cambiar cliente</h3>
@@ -397,11 +428,17 @@
         <label style="font-size:11px;color:var(--muted);">Alias</label>
         <input id="inputAlias" placeholder="alias del dispositivo" autocomplete="off" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
         <label style="font-size:11px;color:var(--muted);">Contraseña de administración</label>
-        <input id="inputAdminPass" type="text" placeholder="contraseña" autocomplete="off" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
+        <div style="display:flex;gap:4px;">
+          <input id="inputAdminPass" type="text" placeholder="contraseña" autocomplete="off" style="flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
+          <button class="btn btn-sm" onclick="togglePassVis('inputAdminPass',this)" style="font-size:14px;padding:4px 8px;" title="Mostrar/Ocultar">👁️</button>
+        </div>
         <label style="font-size:11px;color:var(--muted);">Usuario de app</label>
         <input id="inputUsuario" placeholder="usuario de app" autocomplete="off" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
         <label style="font-size:11px;color:var(--muted);">Contraseña de app</label>
-        <input id="inputAppPass" type="password" placeholder="contraseña" autocomplete="off" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
+        <div style="display:flex;gap:4px;">
+          <input id="inputAppPass" type="text" placeholder="contraseña" autocomplete="off" style="flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
+          <button class="btn btn-sm" onclick="togglePassVis('inputAppPass',this)" style="font-size:14px;padding:4px 8px;" title="Mostrar/Ocultar">👁️</button>
+        </div>
         <label style="font-size:11px;color:var(--muted);">Observación</label>
         <textarea id="inputObservacion" placeholder="notas" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;resize:vertical;"></textarea>
       </div>
@@ -454,9 +491,25 @@ if (window.location.port === '' || window.location.port === '80' || window.locat
 }
 
 async function apiFetch(url, opts = {}) {
-  const resp = await fetch(API_BASE + url, {
-    headers: { 'Content-Type': 'application/json', ...opts.headers },
-    ...opts,
+  const { headers: optsHeaders, sinCliente: _sc, ...fetchOpts } = opts;
+  const sinCliente = !!_sc;
+  let finalUrl = url;
+  if (!sinCliente) {
+    const c = clienteActivo();
+    if (!c) {
+      if (url.includes('/stats')) return {total_dispositivos:0,activos:0,warn:0,degradados:0,caidos:0,alertas_pendientes:0,total_pings:0};
+      if (url.includes('/alertas')) return [];
+      if (url.includes('/dispositivos') && !url.includes('/dispositivos/')) return [];
+      if (url.includes('/reconciliar')) return {};
+      if (url.includes('/poll')) return {};
+      return {};
+    }
+    const sep = url.includes('?') ? '&' : '?';
+    finalUrl = url + sep + 'nombre_cliente=' + encodeURIComponent(c);
+  }
+  const resp = await fetch(API_BASE + finalUrl, {
+    headers: { 'Content-Type': 'application/json', ...optsHeaders },
+    ...fetchOpts,
   });
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   return resp.json();
@@ -619,8 +672,15 @@ async function resolver(id) {
   cargarStats();
 }
 
-async function cargarDatos() {
+async function cargarDatos(autoPoll) {
   document.body.classList.add('refreshing');
+  await sincronizarCliente();
+  const c = clienteActivo();
+  if (!c) {
+    _limpiarUI();
+    setTimeout(() => document.body.classList.remove('refreshing'), 500);
+    return;
+  }
   const statusEl = document.getElementById('statusMsg');
   statusEl.textContent = 'cargando...';
   await sincronizarCliente();
@@ -632,19 +692,47 @@ async function cargarDatos() {
     console.error('cargarDatos error:', e);
   }
   setTimeout(() => document.body.classList.remove('refreshing'), 500);
+  if (autoPoll && !pollActivo && c) {
+    statusEl.textContent = 'Verificando estado...';
+    try {
+      await apiFetch('/api/poll');
+    } catch (_) {
+      toast('Error en verificación');
+    }
+    cargarDatos();
+  }
+}
+
+function _limpiarUI() {
+  document.getElementById('numTotal').textContent = '0';
+  document.getElementById('numUp').textContent = '0';
+  document.getElementById('numWarn').textContent = '0';
+  document.getElementById('numDegradados').textContent = '0';
+  document.getElementById('numDown').textContent = '0';
+  document.getElementById('numAlertas').textContent = '0';
+  document.getElementById('tablaBody').innerHTML = '<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--muted);">Seleccioná o creá una red para comenzar</td></tr>';
+  document.getElementById('alertasBody').innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--muted);">Sin alertas pendientes</td></tr>';
+  document.getElementById('contadorHosts').textContent = '0 hosts';
+  document.getElementById('statusMsg').textContent = '';
 }
 
 function clienteActivo() {
-  const el = document.getElementById('clienteBadge');
-  return el.dataset.cliente || 'red_cliente';
+  return document.getElementById('clienteBadge').dataset.cliente;
 }
 
 async function sincronizarCliente() {
   try {
-    const res = await apiFetch('/api/clientes');
-    const activo = res.activo || 'red_cliente';
-    document.getElementById('clienteBadge').dataset.cliente = activo;
-    document.getElementById('clienteNombre').textContent = activo;
+    const res = await apiFetch('/api/clientes', { sinCliente: true });
+    const actual = clienteActivo();
+    if (res.clientes.length > 0) {
+      if (!actual) {
+        document.getElementById('clienteBadge').dataset.cliente = res.clientes[0];
+        document.getElementById('clienteNombre').textContent = res.clientes[0];
+      } else if (!res.clientes.includes(actual)) {
+        document.getElementById('clienteBadge').dataset.cliente = res.clientes[0];
+        document.getElementById('clienteNombre').textContent = res.clientes[0];
+      }
+    }
   } catch (_) {}
 }
 
@@ -652,13 +740,22 @@ async function generarReporte(formato) {
   const cliente = clienteActivo();
   toast(`Generando reporte ${formato.toUpperCase()}...`);
   try {
-    const res = await apiFetch('/api/reporte?nombre_cliente=' + encodeURIComponent(cliente) + '&formato=' + formato, {
+    const res = await apiFetch('/api/reporte?formato=' + formato, {
       method: 'POST',
     });
-    toast(`Reporte ${formato.toUpperCase()} generado: ${res.ruta}`);
+    const rutaRelativa = res.ruta.replace(/^reportes\//, '');
+    mostrarToastConLink(`✅ Reporte ${formato.toUpperCase()} listo`, `/${res.ruta}`, formato);
   } catch (e) {
     toast('Error: ' + e.message);
   }
+}
+
+function mostrarToastConLink(mensaje, url, formato) {
+  const toast = document.getElementById('toast');
+  toast.innerHTML = `${mensaje} — <a href="${url}" target="_blank" style="color:var(--teal);text-decoration:underline;font-weight:600;">Abrir ${formato.toUpperCase()} ➜</a>`;
+  toast.classList.add('active');
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => toast.classList.remove('active'), 10000);
 }
 
 async function enviarChat() {
@@ -724,14 +821,35 @@ async function iniciarScan() {
   }
 }
 
+async function buscarNuevos() {
+  toast('Buscando nuevos equipos en las subredes conocidas...');
+  try {
+    const res = await apiFetch('/api/discover', { method: 'POST' });
+    if (res.nuevos > 0) {
+      toast(`🔍 ${res.nuevos} nuevo(s) de ${res.total} hosts encontrados`);
+    } else {
+      toast(`Sin novedades: ${res.total} hosts vistos, ninguno nuevo`);
+    }
+    cargarDatos();
+  } catch (e) {
+    toast('Error en descubrimiento: ' + e.message);
+  }
+}
+
 async function esperarScan(cliente) {
   const check = setInterval(async () => {
     try {
-      const est = await apiFetch('/api/scan/estado?nombre_cliente=' + encodeURIComponent(cliente));
+      const est = await apiFetch('/api/scan/estado');
       if (est.estado === 'completo') {
         clearInterval(check);
         const r = est.resultado || {};
         toast(`Escaneo completo: ${r.total || 0} hosts (${r.nuevos || 0} nuevos)`);
+        document.getElementById('statusMsg').textContent = 'Verificando estado...';
+        try {
+          await apiFetch('/api/poll');
+        } catch (_) {
+          toast('Error en verificación de estado');
+        }
         cargarDatos();
       } else if (est.estado === 'error') {
         clearInterval(check);
@@ -748,13 +866,14 @@ async function mostrarModalCliente() {
   const select = document.getElementById('selectCliente');
   select.innerHTML = '<option value="">Cargando...</option>';
   try {
-    const res = await apiFetch('/api/clientes');
+    const res = await apiFetch('/api/clientes', { sinCliente: true });
+    const actual = clienteActivo();
     select.innerHTML = '';
     for (const c of res.clientes) {
       const opt = document.createElement('option');
       opt.value = c;
       opt.textContent = c;
-      if (c === res.activo) opt.selected = true;
+      if (c === actual) opt.selected = true;
       select.appendChild(opt);
     }
     if (res.clientes.length === 0) {
@@ -774,18 +893,10 @@ async function cambiarCliente() {
   const cliente = select.value;
   if (!cliente) { toast('Selecciona un cliente'); return; }
   cerrarModalCliente();
-  try {
-    await apiFetch('/api/clientes/switch', {
-      method: 'POST',
-      body: JSON.stringify({ nombre_cliente: cliente }),
-    });
-    document.getElementById('clienteBadge').dataset.cliente = cliente;
-    document.getElementById('clienteNombre').textContent = cliente;
-    toast('Cliente cambiado a: ' + cliente);
-    cargarDatos();
-  } catch (e) {
-    toast('Error: ' + e.message);
-  }
+  document.getElementById('clienteBadge').dataset.cliente = cliente;
+  document.getElementById('clienteNombre').textContent = cliente;
+  toast('Cliente cambiado a: ' + cliente);
+  cargarDatos(true);
 }
 
 function togglePoll() {
@@ -808,9 +919,11 @@ function togglePoll() {
   pollContador = 0;
   pollIntervalId = setInterval(async () => {
     try {
-      await apiFetch('/api/poll?nombre_cliente=' + encodeURIComponent(clienteActivo()));
+      await apiFetch('/api/poll');
       cargarDatos();
-    } catch (_) {}
+    } catch (_) {
+      console.error('Error en monitoreo');
+    }
   }, ms);
   actualizarContador();
   toast(`Monitoreo iniciado (cada ${segundos}s)`);
@@ -824,39 +937,47 @@ function actualizarContador() {
   setTimeout(actualizarContador, segundos * 1000);
 }
 
+var _serviciosDeviceId = null, _serviciosDeviceIp = null;
+
 async function verServicios(id, ip) {
+  _serviciosDeviceId = id;
+  _serviciosDeviceIp = ip;
   try {
     const data = await apiFetch(`/api/dispositivos/${id}/servicios`);
     const abiertos = data.filter(s => s.estado === 'open');
     const webPorts = abiertos.filter(s => s.puerto === 80 || s.puerto === 443 || s.puerto === 8080 || s.puerto === 8443);
-    document.getElementById('serviciosTitle').textContent = `Servicios - ${ip}`;
-    let html = `<div style="color:var(--muted);font-size:11px;margin-bottom:10px;">${abiertos.length} servicios abiertos${webPorts.length ? ` (${webPorts.length} web)` : ''}</div>`;
-    if (webPorts.length > 0) {
-      html += '<div style="margin-bottom:10px;display:flex;gap:6px;flex-wrap:wrap;">';
-      for (const w of webPorts) {
-        const proto = w.puerto === 443 || w.puerto === 8443 ? 'https' : 'http';
-        html += `<a href="${proto}://${ip}:${w.puerto}" target="_blank" style="background:var(--accent, #0EA5A0);color:#fff;padding:4px 10px;border-radius:var(--radius);text-decoration:none;font-size:11px;">🌐 ${proto.toUpperCase()} :${w.puerto}</a>`;
-      }
-      html += '</div>';
-    }
-    if (data.length === 0) {
-      html = '<div style="color:var(--muted);padding:12px;text-align:center;">Sin servicios detectados</div>';
+    document.getElementById('serviciosTitle').textContent = `🔍 Puertos abiertos - ${ip}`;
+    let html = '';
+    if (abiertos.length === 0) {
+      html = '<div style="color:var(--muted);padding:16px;text-align:center;font-size:12px;">Sin puertos abiertos detectados.<br><br><button class="btn btn-primary" onclick="escanearPuertosAhora()" style="font-size:11px;padding:6px 16px;">🔍 Escanear puertos</button></div>';
     } else {
+      html = `<div style="display:flex;gap:6px;margin-bottom:10px;font-size:10px;flex-wrap:wrap;">`;
+      html += `<span style="background:rgba(0,200,83,0.1);color:var(--up);padding:2px 8px;border-radius:10px;border:1px solid rgba(0,200,83,0.2);">▲ ${abiertos.length} abiertos</span>`;
+      if (webPorts.length > 0) {
+        html += `<span style="background:rgba(0,200,212,0.1);color:var(--teal);padding:2px 8px;border-radius:10px;border:1px solid rgba(0,200,212,0.2);">🌐 ${webPorts.length} web</span>`;
+      }
+      html += `</div>`;
+      if (webPorts.length > 0) {
+        html += '<div style="margin-bottom:10px;display:flex;gap:6px;flex-wrap:wrap;">';
+        for (const w of webPorts) {
+          const proto = w.puerto === 443 || w.puerto === 8443 ? 'https' : 'http';
+          html += `<a href="${proto}://${ip}:${w.puerto}" target="_blank" style="background:var(--accent, #0EA5A0);color:#fff;padding:4px 10px;border-radius:var(--radius);text-decoration:none;font-size:11px;">🌐 ${proto.toUpperCase()} :${w.puerto}</a>`;
+        }
+        html += '</div>';
+      }
       html += '<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:var(--bg);">';
       html += '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);">Puerto</th>';
-      html += '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);">Proto</th>';
+      html += '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);">Protocolo</th>';
       html += '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);">Servicio</th>';
-      html += '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);">Version</th>';
-      html += '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);">Estado</th></tr></thead><tbody>';
-      for (const s of data) {
-        const isWeb = s.estado === 'open' && (s.puerto === 80 || s.puerto === 443 || s.puerto === 8080 || s.puerto === 8443);
-        const bg = isWeb ? 'background:rgba(0,200,83,0.06);' : (s.estado === 'open' ? '' : 'background:rgba(220,38,38,0.06);');
+      html += '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);">Versión</th></tr></thead><tbody>';
+      for (const s of abiertos) {
+        const isWeb = s.puerto === 80 || s.puerto === 443 || s.puerto === 8080 || s.puerto === 8443;
+        const bg = isWeb ? 'background:rgba(0,200,83,0.06);' : '';
         html += `<tr style="${bg}">`;
         html += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);font-weight:600;">${s.puerto}</td>`;
         html += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);">${s.protocolo || '—'}</td>`;
         html += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);">${s.servicio || '—'}${isWeb ? ' 🌐' : ''}</td>`;
         html += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);color:var(--muted);font-size:10px;">${s.version || '—'}</td>`;
-        html += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);"><span class="status-dot ${s.estado === 'open' ? 'dot-up' : 'dot-down'}"></span>${s.estado || '—'}</td>`;
         html += '</tr>';
       }
       html += '</tbody></table>';
@@ -869,36 +990,40 @@ async function verServicios(id, ip) {
   }
 }
 
+var _escanerPuertosActivo = false;
+
+async function escanearPuertosAhora() {
+  if (_escanerPuertosActivo) return;
+  _escanerPuertosActivo = true;
+  const id = _serviciosDeviceId, ip = _serviciosDeviceIp;
+  if (!id) return;
+  const body = document.getElementById('serviciosBody');
+  body.innerHTML = '<div style="color:var(--muted);padding:16px;text-align:center;font-size:12px;">Escaneando puertos...<br><span style="font-size:10px;">Esto puede tomar hasta 90 segundos</span></div>';
+  try {
+    const res = await apiFetch(`/api/dispositivos/${id}/escanear-puertos`, { method: 'POST' });
+    if (res.puertos && res.puertos.length > 0) {
+      verServicios(id, ip);
+    } else {
+      body.innerHTML = '<div style="color:var(--muted);padding:16px;text-align:center;font-size:12px;">No se encontraron puertos abiertos en este equipo.</div>';
+    }
+  } catch (e) {
+    body.innerHTML = '<div style="color:var(--down);padding:16px;text-align:center;font-size:12px;">Error al escanear puertos.<br><button class="btn" onclick="escanearPuertosAhora()" style="margin-top:8px;">Reintentar</button></div>';
+  }
+  _escanerPuertosActivo = false;
+}
+
 function cerrarModalServicios() {
   document.getElementById('modalServicios').classList.remove('active');
 }
 
 let _credencialId = null;
 
-async function verCredenciales(id, ip) {
-  _credencialId = id;
-  document.getElementById('credencialesTitle').textContent = `Credenciales - ${ip}`;
-  document.getElementById('inputSerial').value = '';
-  document.getElementById('inputAlias').value = '';
-  document.getElementById('inputAdminPass').value = '';
-  document.getElementById('inputUsuario').value = '';
-  document.getElementById('inputAppPass').value = '';
-  document.getElementById('inputObservacion').value = '';
-  document.getElementById('serialGroupReadonly').style.display = 'none';
-  document.getElementById('serialGroupManual').style.display = 'none';
-  document.getElementById('serialGroupManual').style.display = 'flex';
-  document.getElementById('modalCredenciales').classList.add('active');
+function verCredenciales(id, ip) {
+  mostrarModalAdminKey('ver_credenciales', { id, ip });
 }
 
-async function eliminarDispositivo(id, ip) {
-  if (!confirm(`¿Eliminar ${ip} definitivamente?`)) return;
-  try {
-    await apiFetch(`/api/dispositivos/${id}`, { method: 'DELETE' });
-    toast(`Dispositivo ${ip} eliminado`);
-    cargarDatos();
-  } catch (e) {
-    toast('Error: ' + e.message);
-  }
+function eliminarDispositivo(id, ip) {
+  mostrarModalAdminKey('borrar_dispositivo', { id, ip });
 }
 
 async function guardarCredenciales() {
@@ -926,6 +1051,17 @@ async function guardarCredenciales() {
   }
 }
 
+function togglePassVis(inputId, btn) {
+  const input = document.getElementById(inputId);
+  if (input.type === 'password') {
+    input.type = 'text';
+    btn.textContent = '👁️';
+  } else {
+    input.type = 'password';
+    btn.textContent = '👁️‍🗨️';
+  }
+}
+
 function cerrarModalCredenciales() {
   document.getElementById('modalCredenciales').classList.remove('active');
   _credencialId = null;
@@ -939,6 +1075,49 @@ async function borrarAlertas() {
     toast('Alertas eliminadas');
   } catch (e) {
     toast('Error al borrar alertas');
+  }
+}
+
+function toggleCleanMode() {
+  const dias = document.querySelector('input[name="cleanMode"][value="dias"]').checked;
+  document.getElementById('inputCleanDias').disabled = !dias;
+  document.getElementById('inputCleanPorDisp').disabled = dias;
+}
+
+function mostrarModalCleanPings() {
+  document.getElementById('modalCleanPings').classList.add('active');
+  const info = document.getElementById('cleanPingInfo');
+  info.textContent = 'Consultando cantidad de pings...';
+  apiFetch('/api/stats').then(s => {
+    info.textContent = `Actualmente hay ${s.total_pings || 0} registros de ping.`;
+  }).catch(() => {
+    info.textContent = 'No se pudo consultar la cantidad de pings.';
+  });
+}
+
+function cerrarModalCleanPings() {
+  document.getElementById('modalCleanPings').classList.remove('active');
+}
+
+async function ejecutarCleanPings() {
+  const modo = document.querySelector('input[name="cleanMode"]:checked').value;
+  const body = {};
+  if (modo === 'dias') {
+    body.dias = parseInt(document.getElementById('inputCleanDias').value) || 30;
+  } else {
+    body.por_dispositivo = parseInt(document.getElementById('inputCleanPorDisp').value) || 1000;
+  }
+  cerrarModalCleanPings();
+  toast('Limpiando historial de pings...');
+  try {
+    const res = await apiFetch('/api/pings/clean', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+    toast(`🧹 Limpiados: ${res.borrados} pings · Quedan: ${res.restantes}`);
+    cargarDatos();
+  } catch (e) {
+    toast('Error: ' + e.message);
   }
 }
 
@@ -959,10 +1138,10 @@ async function speedtest() {
     document.getElementById('spBar').style.width = pct + '%';
   }, 1000);
   try {
-    const { task_id } = await apiFetch('/api/speedtest', { method: 'POST' });
+    const { task_id } = await apiFetch('/api/speedtest', { sinCliente: true, method: 'POST' });
     const poll = setInterval(async () => {
       try {
-        const res = await apiFetch('/api/speedtest/estado/' + task_id);
+        const res = await apiFetch('/api/speedtest/estado/' + task_id, { sinCliente: true });
         if (res.estado === 'completo') {
           clearInterval(poll);
           clearInterval(anim);
@@ -994,9 +1173,11 @@ async function speedtest() {
 }
 
 let _adminAccion = null;
+let _adminAccionParams = null;
 
-function mostrarModalAdminKey(accion) {
+function mostrarModalAdminKey(accion, params) {
   _adminAccion = accion;
+  _adminAccionParams = params || null;
   document.getElementById('inputAdminKey').value = '';
   document.getElementById('modalAdminKey').classList.add('active');
   document.getElementById('inputAdminKey').focus();
@@ -1005,15 +1186,62 @@ function mostrarModalAdminKey(accion) {
 function cerrarModalAdminKey() {
   document.getElementById('modalAdminKey').classList.remove('active');
   _adminAccion = null;
+  _adminAccionParams = null;
 }
 
 async function confirmarAdminKey() {
   const clave = document.getElementById('inputAdminKey').value.trim();
   if (!clave) return;
+  const accion = _adminAccion;
+  const params = _adminAccionParams;
   cerrarModalAdminKey();
-  if (_adminAccion === 'reconciliar') await ejecutarReconciliacion(clave);
-  else if (_adminAccion === 'borrar') await ejecutarBorrado(clave);
-  _adminAccion = null;
+  if (accion === 'reconciliar') await ejecutarReconciliacion(clave);
+  else if (accion === 'borrar') await ejecutarBorrado(clave);
+  else if (accion === 'borrar_dispositivo') await ejecutarBorradoDispositivo(clave, params);
+  else if (accion === 'ver_credenciales') await ejecutarVerCredenciales(clave, params);
+}
+
+async function ejecutarBorradoDispositivo(clave, params) {
+  if (!params) return;
+  if (!confirm(`¿Eliminar ${params.ip} definitivamente?`)) return;
+  try {
+    const res = await apiFetch(`/api/dispositivos/${params.id}`, {
+      method: 'DELETE',
+      headers: { 'X-Admin-Key': clave },
+    });
+    toast(res.mensaje || `Dispositivo ${params.ip} eliminado`);
+    cargarDatos();
+  } catch (e) {
+    toast('Error: ' + (e.message.includes('403') ? 'Clave incorrecta' : e.message));
+  }
+}
+
+async function ejecutarVerCredenciales(clave, params) {
+  if (!params) return;
+  try {
+    const data = await apiFetch(`/api/dispositivos/${params.id}/credenciales`, {
+      headers: { 'X-Admin-Key': clave },
+    });
+    _credencialId = params.id;
+    document.getElementById('credencialesTitle').textContent = `Credenciales - ${params.ip}`;
+    document.getElementById('inputSerial').value = data.serial || '';
+    document.getElementById('inputAlias').value = data.alias || '';
+    document.getElementById('inputAdminPass').value = data.admin_pass || '';
+    document.getElementById('inputUsuario').value = data.usuario || '';
+    document.getElementById('inputAppPass').value = data.app_pass || '';
+    document.getElementById('inputObservacion').value = data.observacion || '';
+    if (data.serial) {
+      document.getElementById('spanSerial').textContent = data.serial;
+      document.getElementById('serialGroupReadonly').style.display = 'flex';
+      document.getElementById('serialGroupManual').style.display = 'none';
+    } else {
+      document.getElementById('serialGroupReadonly').style.display = 'none';
+      document.getElementById('serialGroupManual').style.display = 'flex';
+    }
+    document.getElementById('modalCredenciales').classList.add('active');
+  } catch (e) {
+    toast('Error: ' + (e.message.includes('403') ? 'Clave incorrecta' : e.message));
+  }
 }
 
 async function ejecutarReconciliacion(clave) {
@@ -1032,13 +1260,17 @@ async function ejecutarReconciliacion(clave) {
 async function ejecutarBorrado(clave) {
   if (!confirm('¿BORRAR TODA LA RED? Se eliminarán todos los dispositivos, pings, alertas y servicios. Esta acción NO se puede deshacer.')) return;
   if (!confirm('¿Estás SEGURO? Esta es tu última oportunidad antes de borrar todo.')) return;
+  const cliente = clienteActivo();
+  if (!cliente) { toast('No hay red activa'); return; }
   try {
     const res = await apiFetch('/api/red', {
       method: 'DELETE',
       headers: { 'X-Admin-Key': clave },
     });
     toast(res.mensaje);
-    cargarDatos();
+    document.getElementById('clienteBadge').dataset.cliente = '';
+    document.getElementById('clienteNombre').textContent = '—';
+    _limpiarUI();
   } catch (e) {
     toast('Error: ' + (e.message.includes('403') ? 'Clave incorrecta' : e.message));
   }
@@ -1133,7 +1365,7 @@ function borrarRed() {
   draw();
 })();
 
-cargarDatos();
+cargarDatos(true);
 </script>
 </body>
 </html>
