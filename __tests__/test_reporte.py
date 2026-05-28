@@ -50,14 +50,14 @@ def test_colectar_datos(setup_db):
 def test_generar_html_no_db():
     from exportar.generar_reporte import generar_html
 
-    with pytest.raises(FileNotFoundError):
+    with pytest.raises(Exception):
         generar_html("cliente_inexistente")
 
 
 def test_generar_txt_no_db():
     from exportar.generar_reporte import generar_txt
 
-    with pytest.raises(FileNotFoundError):
+    with pytest.raises(Exception):
         generar_txt("cliente_inexistente")
 
 

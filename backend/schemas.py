@@ -68,6 +68,7 @@ class AlertaOut(BaseModel):
     timestamp: datetime
     resuelta: int = 0
     analisis_ia: Optional[str] = None
+    ip: Optional[str] = None
 
 
 class ScanRequest(BaseModel):

@@ -6,7 +6,7 @@
 <title>VigIA — Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script>
-var MODO_XAMPP = true;
+var MODO_XAMPP = false;
 var PUERTO_BACKEND = 8080;
 var API_BASE2 = MODO_XAMPP ? 'http://localhost:' + PUERTO_BACKEND : '';
 var _sb = MODO_XAMPP ? (location.protocol + '//' + location.host + '/VigIA/frontend') : (API_BASE2 + '/static');
@@ -196,6 +196,8 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
   .contador { color: var(--muted); font-size: 10px; margin-left: auto; }
   @keyframes refreshPulse { 0%{opacity:1;} 50%{opacity:0.5;} 100%{opacity:1;} }
   .refreshing #tablaBody { animation: refreshPulse 0.4s ease; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner { display:inline-block; width:14px; height:14px; border:2px solid var(--border); border-top-color:var(--teal); border-radius:50%; animation:spin 0.8s linear infinite; vertical-align:middle; margin-right:6px; }
   .toast {
     position: fixed; bottom: 24px; right: 24px; background: rgba(0,200,212,0.9); color: #000;
     padding: 8px 16px; border-radius: var(--radius); font-size: 11px;
@@ -485,11 +487,16 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
             <option value="30" selected>30s</option>
           </select>
           <button class="btn" onclick="buscarNuevos()">🔍 Buscar nuevos</button>
+          <button class="btn" onclick="buscarNuevosTodas()">🔍🌐 Todas las redes</button>
           <button class="btn" onclick="cargarDatos()">↻ Reload</button>
-          <button class="btn" onclick="generarReporte('html')">📄 HTML</button>
-          <button class="btn" onclick="generarReporte('txt')">📃 TXT</button>
+          <select id="selectReporte" style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:4px;font-family:var(--font);font-size:10px;" onchange="if(this.value) generarReporte(this.value); this.value=''">
+            <option value="">📄 Reportes</option>
+            <option value="html">HTML</option>
+            <option value="txt">TXT</option>
+          </select>
           <button class="btn" onclick="reconciliarRed()">♻ Reconciliar</button>
-          <button class="btn" onclick="mostrarModalCleanPings()">🧹 Limpiar pings</button>
+          <button class="btn" onclick="agregarVendor()">➕ Vendor</button>
+          <button class="btn" onclick="mostrarModalCleanPings()">🧹 Limpiar</button>
           <button class="btn" onclick="borrarRed()" style="color:var(--down);border-color:rgba(232,72,72,0.2);">✖ Borrar Red</button>
           <span class="contador" id="contador">—</span>
         </div>
@@ -802,6 +809,23 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
   </div>
 </div>
 
+<div class="modal-overlay" id="modalAddVendor">
+  <div class="modal">
+    <h3>➕ Agregar Fabricante por MAC</h3>
+    <p style="font-size:11px;color:var(--muted);margin-bottom:12px;">Asigná un fabricante a una dirección MAC para mejorar la reconciliación.</p>
+    <label style="font-size:11px;color:var(--muted);">MAC</label>
+    <input id="inputVendorMac" type="text" placeholder="XX:XX:XX:XX:XX:XX" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;margin-bottom:10px;">
+    <label style="font-size:11px;color:var(--muted);">Fabricante</label>
+    <input id="inputVendorName" type="text" placeholder="Ej: Hikvision, Dahua, Cisco..." style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;margin-bottom:10px;">
+    <label style="font-size:11px;color:var(--muted);">Confianza (1-100)</label>
+    <input id="inputVendorConf" type="number" value="85" min="1" max="100" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;margin-bottom:14px;">
+    <div class="modal-btns">
+      <button class="btn" onclick="cerrarModalAddVendor()">Cancelar</button>
+      <button class="btn btn-primary" onclick="siguienteAddVendor()">Siguiente</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modalAdminKey">
   <div class="modal">
     <h3>🔐 Clave de seguridad</h3>
@@ -814,6 +838,30 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
   </div>
 </div>
 
+<div class="modal-overlay" id="modalNuevos">
+  <div class="modal wide" style="width:750px;">
+    <h3>🔍 Hosts descubiertos</h3>
+    <div style="max-height:400px;overflow-y:auto;font-size:11px;margin-bottom:12px;">
+      <table class="table-dispositivos" id="tablaNuevos" style="font-size:11px;">
+        <thead><tr>
+          <th>IP</th>
+          <th>MAC</th>
+          <th>Hostname</th>
+          <th>Fabricante</th>
+          <th>Estado</th>
+        </tr></thead>
+        <tbody id="tbodyNuevos"></tbody>
+      </table>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;font-size:11px;color:var(--muted);">
+      <span id="nuevosResumen"></span>
+      <div class="modal-btns" style="margin:0;">
+        <button class="btn" onclick="cerrarModalNuevos()">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 let pollIntervalId = null;
 let pollContador = 0;
@@ -822,7 +870,7 @@ let pollActivo = false;
 // === CONFIGURACIÓN ===
 // MODO_XAMPP = true:  frontend servido por Apache (XAMPP), backend Python en PUERTO_BACKEND
 // MODO_XAMPP = false: backend Python sirve todo (puerto 8080)
-var MODO_XAMPP = true;
+var MODO_XAMPP = false;
 var PUERTO_BACKEND = 8080;
 // =====================
 
@@ -836,8 +884,18 @@ if (MODO_XAMPP) {
   if (_ml) _ml.href = '/mapa';
 }
 
+function escapeHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function escapeAttr(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
 async function apiFetch(url, opts = {}) {
-  const { headers: optsHeaders, sinCliente: _sc, ...fetchOpts } = opts;
+  const { headers: optsHeaders, sinCliente: _sc, timeout, ...fetchOpts } = opts;
   const sinCliente = !!_sc;
   let finalUrl = url;
   if (!sinCliente) {
@@ -854,12 +912,22 @@ async function apiFetch(url, opts = {}) {
     const sep = url.includes('?') ? '&' : '?';
     finalUrl = url + sep + 'nombre_cliente=' + encodeURIComponent(c);
   }
-  const resp = await fetch(API_BASE + finalUrl, {
-    headers: { 'Content-Type': 'application/json', ...optsHeaders },
-    ...fetchOpts,
-  });
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-  return resp.json();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout || 15000);
+  try {
+    const resp = await fetch(API_BASE + finalUrl, {
+      headers: { 'Content-Type': 'application/json', ...optsHeaders },
+      signal: controller.signal,
+      ...fetchOpts,
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return resp.json();
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error('Timeout');
+    throw e;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 async function mostrarIPPublica() {
@@ -974,7 +1042,7 @@ async function cargarDispositivos() {
         <td><span class="status-dot ${dotClass}"></span>${estadoTexto}</td>
         <td>${latStr}</td>
         <td>${ultima}</td>
-        <td><button class="btn btn-sm" onclick="eliminarDispositivo(${d.id}, '${d.ip}')">🗑️</button> <button class="btn btn-sm" onclick="verServicios(${d.id}, '${d.ip}')">🔍</button> <button class="btn btn-sm" onclick="verCredenciales(${d.id}, '${d.ip}')">🔑</button></td>
+        <td><button class="btn btn-sm" onclick="eliminarDispositivo(${d.id}, '${escapeAttr(d.ip)}')">🗑️</button> <button class="btn btn-sm" onclick="verServicios(${d.id}, '${escapeAttr(d.ip)}')">🔍</button> <button class="btn btn-sm" onclick="verCredenciales(${d.id}, '${escapeAttr(d.ip)}')">🔑</button></td>
       `;
       const sel = tr.querySelector('.asig-select');
       sel.addEventListener('change', async function() {
@@ -1009,12 +1077,7 @@ async function cargarAlertas() {
     }
 
     for (const a of data) {
-      let dispIp = '—';
-      try {
-        const d = await apiFetch(`/api/dispositivos/${a.dispositivo_id}`);
-        dispIp = d.ip;
-      } catch (_) {}
-
+      const dispIp = a.ip || '—';
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td style="white-space:nowrap">${new Date(a.timestamp).toLocaleString()}</td>
@@ -1037,7 +1100,6 @@ async function resolver(id) {
 
 async function cargarDatos(autoPoll) {
   document.body.classList.add('refreshing');
-  await sincronizarCliente();
   const c = clienteActivo();
   if (!c) {
     _limpiarUI();
@@ -1045,11 +1107,18 @@ async function cargarDatos(autoPoll) {
     return;
   }
   const statusEl = document.getElementById('statusMsg');
-  statusEl.textContent = 'cargando...';
+  statusEl.innerHTML = '<span class="spinner"></span>cargando...';
   await sincronizarCliente();
   try {
     await Promise.all([cargarStats(), cargarDispositivos(), cargarAlertas()]);
-    statusEl.textContent = '';
+    statusEl.innerHTML = '';
+    const totalDisp = parseInt(document.getElementById('numTotal').textContent, 10);
+    if (totalDisp === 0 && !window._scanPrompted) {
+      window._scanPrompted = true;
+      setTimeout(() => {
+        toast('📡 Sin dispositivos. Usá "Crear red / Escanear" para comenzar.');
+      }, 1000);
+    }
   } catch (e) {
     statusEl.textContent = 'Error al cargar';
     console.error('cargarDatos error:', e);
@@ -1073,7 +1142,7 @@ function _limpiarUI() {
   document.getElementById('numDegradados').textContent = '0';
   document.getElementById('numDown').textContent = '0';
   document.getElementById('numAlertas').textContent = '0';
-  document.getElementById('tablaBody').innerHTML = '<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--muted);">Seleccioná o creá una red para comenzar</td></tr>';
+  document.getElementById('tablaBody').innerHTML = '<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--muted);">Seleccioná o creá una red para comenzar<br><br><button class="btn btn-primary" onclick="mostrarModalScan()" style="font-size:13px;padding:8px 24px;">📡 Crear red / Escanear</button></td></tr>';
   document.getElementById('alertasBody').innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--muted);">Sin alertas pendientes</td></tr>';
   document.getElementById('contadorHosts').textContent = '0 hosts';
   document.getElementById('statusMsg').textContent = '';
@@ -1115,9 +1184,10 @@ async function generarReporte(formato) {
 
 function mostrarToastConLink(mensaje, url, formato) {
   const toast = document.getElementById('toast');
-  toast.innerHTML = `${mensaje} — <a href="${url}" target="_blank" style="color:var(--teal);text-decoration:underline;font-weight:600;">Abrir ${formato.toUpperCase()} ➜</a>`;
+  const safeUrl = escapeAttr(url);
+  toast.innerHTML = `${escapeHtml(mensaje)} — <a href="${safeUrl}" target="_blank" style="color:var(--teal-lt);text-decoration:underline;">Abrir ${escapeHtml(formato).toUpperCase()}</a>`;
   toast.classList.add('active');
-  clearTimeout(toast._timer);
+  if (toast._timer) clearTimeout(toast._timer);
   toast._timer = setTimeout(() => toast.classList.remove('active'), 10000);
 }
 
@@ -1127,7 +1197,7 @@ async function enviarChat() {
   if (!pregunta) return;
   input.value = '';
   const chatBox = document.getElementById('chatBox');
-  chatBox.innerHTML += `<div style="color:var(--teal-lt);margin-bottom:4px;"><strong>Tu:</strong> ${pregunta}</div>`;
+  chatBox.innerHTML += `<div style="color:var(--teal-lt);margin-bottom:4px;"><strong>Tu:</strong> ${escapeHtml(pregunta)}</div>`;
   chatBox.innerHTML += `<div style="color:var(--muted);font-style:italic;margin-bottom:8px;">Pensando...</div>`;
   chatBox.scrollTop = chatBox.scrollHeight;
 
@@ -1137,11 +1207,13 @@ async function enviarChat() {
       method: 'POST',
       body: JSON.stringify({ pregunta: pregunta, nombre_cliente: cliente }),
     });
-    chatBox.querySelector('div:last-child').remove();
-    chatBox.innerHTML += `<div style="color:var(--teal);margin-bottom:12px;border-left:2px solid var(--teal);padding-left:8px;">${res.respuesta}</div>`;
+    const el = chatBox.querySelector('div:last-child');
+    if (el) el.remove();
+    chatBox.innerHTML += `<div style="color:var(--teal);margin-bottom:12px;border-left:2px solid var(--teal);padding-left:8px;">${escapeHtml(res.respuesta)}</div>`;
   } catch (e) {
-    chatBox.querySelector('div:last-child').remove();
-    chatBox.innerHTML += `<div style="color:var(--down);margin-bottom:8px;">Error: ${e.message}</div>`;
+    const el2 = chatBox.querySelector('div:last-child');
+    if (el2) el2.remove();
+    chatBox.innerHTML += `<div style="color:var(--down);margin-bottom:8px;">Error: ${escapeHtml(e.message)}</div>`;
   }
   chatBox.scrollTop = chatBox.scrollHeight;
 }
@@ -1162,66 +1234,147 @@ function cerrarModalScan() {
 
 async function iniciarScan() {
   const rango = document.getElementById('inputRango').value.trim();
-  const cliente = document.getElementById('inputCliente').value.trim() || clienteActivo();
+  let cliente = document.getElementById('inputCliente').value.trim() || clienteActivo();
   if (!rango) { toast('Ingresa un rango IP'); return; }
+  if (!cliente) cliente = 'red_cliente';
+
+  const ok = await probarBackend();
+  if (!ok) {
+    toast('❌ Backend no responde en ' + API_BASE + '/api/health. ¿Corriste python3 backend/main.py?');
+    return;
+  }
+
   cerrarModalScan();
   document.getElementById('clienteBadge').dataset.cliente = cliente;
   document.getElementById('clienteNombre').textContent = cliente;
+  toast('🔍 Escaneando ' + rango + '...');
   try {
     const res = await apiFetch('/api/scan', {
       method: 'POST',
       body: JSON.stringify({ rango_ip: rango, nombre_cliente: cliente }),
     });
+    if (res.ok === undefined && Object.keys(res).length === 0) {
+      toast('Error: el backend no respondió');
+      return;
+    }
     toast(res.mensaje || 'Escaneo iniciado');
-    esperarScan(cliente);
+    esperarScan(cliente, rango);
   } catch (e) {
     if (e.message.includes('409')) {
       toast('Ya hay un escaneo en progreso. Espera...');
-      esperarScan(cliente);
+      esperarScan(cliente, rango);
     } else {
       toast('Error: ' + e.message);
     }
   }
 }
 
+async function probarBackend() {
+  try {
+    const r = await fetch(API_BASE + '/api/health', { signal: AbortSignal.timeout(3000) });
+    return r.ok;
+  } catch { return false; }
+}
+
+async function esperarScan(cliente, rango) {
+  let intentos = 0;
+  const check = setInterval(async () => {
+    intentos++;
+    try {
+      const est = await apiFetch('/api/scan/estado');
+      if (est.estado === 'completo') {
+        clearInterval(check);
+        toast('✅ Escaneo completado para ' + (rango || cliente));
+        try {
+          await apiFetch('/api/poll', { method: 'POST' });
+        } catch (_) {}
+        cargarDatos();
+      } else if (est.estado === 'error') {
+        clearInterval(check);
+        toast('Error en escaneo: ' + (est.error || 'desconocido'));
+      } else if (est.estado === 'inactivo') {
+        if (intentos > 60) {
+          clearInterval(check);
+          toast('El escaneo no inició o ya terminó');
+        }
+      } else if (est.estado === 'en_progreso') {
+        if (intentos % 5 === 0) toast('⏳ Escaneando...');
+      }
+    } catch (_) {
+      clearInterval(check);
+      toast('Error al consultar estado del escaneo');
+    }
+  }, 3000);
+}
+
 async function buscarNuevos() {
   toast('Buscando nuevos equipos en las subredes conocidas...');
   try {
     const res = await apiFetch('/api/discover', { method: 'POST' });
-    if (res.nuevos > 0) {
-      toast(`🔍 ${res.nuevos} nuevo(s) de ${res.total} hosts encontrados`);
-    } else {
-      toast(`Sin novedades: ${res.total} hosts vistos, ninguno nuevo`);
-    }
     cargarDatos();
+    mostrarModalNuevos(res.hosts || [], res.nuevos || 0);
   } catch (e) {
     toast('Error en descubrimiento: ' + e.message);
   }
 }
 
-async function esperarScan(cliente) {
-  const check = setInterval(async () => {
-    try {
-      const est = await apiFetch('/api/scan/estado');
-      if (est.estado === 'completo') {
-        clearInterval(check);
-        const r = est.resultado || {};
-        toast(`Escaneo completo: ${r.total || 0} hosts (${r.nuevos || 0} nuevos)`);
-        document.getElementById('statusMsg').textContent = 'Verificando estado...';
-        try {
-          await apiFetch('/api/poll');
-        } catch (_) {
-          toast('Error en verificación de estado');
-        }
-        cargarDatos();
-      } else if (est.estado === 'error') {
-        clearInterval(check);
-        toast('Error: ' + (est.error || 'desconocido'));
-      } else if (est.estado === 'inactivo') {
-        clearInterval(check);
-      }
-    } catch (_) { clearInterval(check); }
-  }, 3000);
+async function buscarNuevosTodas() {
+  toast('Buscando nuevos equipos en TODAS las redes...');
+  try {
+    const res = await apiFetch('/api/discover?todas=1', { method: 'POST' });
+    cargarDatos();
+    const totalNuevos = res.nuevos || 0;
+    const detalle = res.por_cliente || {};
+    let msg = `🔍 ${totalNuevos} nuevo(s) encontrados`;
+    for (const [cliente, info] of Object.entries(detalle)) {
+      if (info.nuevos > 0) msg += ` | ${cliente}: ${info.nuevos}`;
+    }
+    toast(msg);
+    mostrarModalNuevos(res.hosts || [], totalNuevos);
+  } catch (e) {
+    toast('Error en descubrimiento: ' + e.message);
+  }
+}
+
+function mostrarModalNuevos(hosts, nuevos) {
+  const tbody = document.getElementById('tbodyNuevos');
+  const resumen = document.getElementById('nuevosResumen');
+  tbody.innerHTML = '';
+  let nuevosCount = 0;
+  let cambiadosCount = 0;
+  for (const h of hosts) {
+    const tr = document.createElement('tr');
+    const esNuevo = h.nuevo;
+    if (esNuevo) nuevosCount++;
+    const cambioIp = h.ip_anterior || '';
+    if (cambioIp) cambiadosCount++;
+    const estadoHtml = esNuevo
+      ? '<span style="color:var(--green);">🆕 Nuevo</span>'
+      : cambioIp
+        ? `<span style="color:var(--warn);">↻ Antes: ${cambioIp}</span>`
+        : '<span style="color:var(--muted);">Existente</span>';
+    tr.innerHTML = `<td>${h.ip}</td>
+      <td style="font-size:10px;color:var(--muted);">${h.mac || '—'}</td>
+      <td>${h.hostname || '—'}</td>
+      <td>${h.fabricante || '—'}</td>
+      <td>${estadoHtml}</td>`;
+    tbody.appendChild(tr);
+  }
+  const total = hosts.length;
+  if (nuevosCount > 0) {
+    resumen.textContent = `🆕 ${nuevosCount} nuevo(s) de ${total} hosts`;
+  } else if (cambiadosCount > 0) {
+    resumen.textContent = `${cambiadosCount} dispositivo(s) actualizados por cambio de IP`;
+  } else if (total > 0) {
+    resumen.textContent = `${total} hosts vistos, ninguno nuevo`;
+  } else {
+    resumen.textContent = 'No se encontraron hosts activos';
+  }
+  document.getElementById('modalNuevos').classList.add('active');
+}
+
+function cerrarModalNuevos() {
+  document.getElementById('modalNuevos').classList.remove('active');
 }
 
 async function mostrarModalCliente() {
@@ -1586,6 +1739,7 @@ async function confirmarAdminKey() {
   const params = _adminAccionParams;
   cerrarModalAdminKey();
   if (accion === 'reconciliar') await ejecutarReconciliacion(clave);
+  else if (accion === 'add_vendor') await ejecutarAddVendor(clave, params);
   else if (accion === 'borrar') await ejecutarBorrado(clave);
   else if (accion === 'borrar_dispositivo') await ejecutarBorradoDispositivo(clave, params);
   else if (accion === 'ver_credenciales') await ejecutarVerCredenciales(clave, params);
@@ -1671,6 +1825,43 @@ async function ejecutarBorrado(clave) {
 
 function reconciliarRed() {
   mostrarModalAdminKey('reconciliar');
+}
+
+function agregarVendor() {
+  document.getElementById('inputVendorMac').value = '';
+  document.getElementById('inputVendorName').value = '';
+  document.getElementById('inputVendorConf').value = '85';
+  document.getElementById('modalAddVendor').classList.add('active');
+  document.getElementById('inputVendorMac').focus();
+}
+
+function cerrarModalAddVendor() {
+  document.getElementById('modalAddVendor').classList.remove('active');
+}
+
+function siguienteAddVendor() {
+  const mac = document.getElementById('inputVendorMac').value.trim();
+  const vendor = document.getElementById('inputVendorName').value.trim();
+  const conf = parseInt(document.getElementById('inputVendorConf').value) || 85;
+  if (!mac) { toast('Ingresá una dirección MAC'); return; }
+  if (!vendor) { toast('Ingresá un fabricante'); return; }
+  cerrarModalAddVendor();
+  mostrarModalAdminKey('add_vendor', { mac, vendor, confidence: conf });
+}
+
+async function ejecutarAddVendor(clave, params) {
+  if (!params) return;
+  try {
+    const res = await apiFetch('/api/mac-vendor', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Key': clave },
+      body: JSON.stringify(params),
+    });
+    toast(`${res.creado ? 'Agregado' : 'Actualizado'}: ${res.mac} → ${res.vendor}`);
+    cargarDatos();
+  } catch (e) {
+    toast('Error: ' + (e.message.includes('403') ? 'Clave incorrecta' : e.message));
+  }
 }
 
 function borrarRed() {

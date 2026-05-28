@@ -7,17 +7,17 @@ from pydantic import BaseModel
 from contextlib import asynccontextmanager
 import asyncio
 
-from fastapi import FastAPI, HTTPException, Query, Header
+from fastapi import FastAPI, HTTPException, Query, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
-from sqlalchemy import func
+from sqlalchemy import func, case
 from sqlalchemy.orm import Session
 import speedtest as st_lib
 import uuid
 
 from backend.database import init_db, get_session, get_or_create_cliente
-from backend.models import Cliente, Dispositivo, Ping, Alerta, Servicio, PosicionTopologia, Credencial
+from backend.models import Cliente, Dispositivo, Ping, Alerta, Servicio, PosicionTopologia, Credencial, MacVendorExact
 from backend.schemas import (
     DispositivoCreate, DispositivoOut, DispositivoConEstado,
     PingOut, ServicioOut, AlertaOut,
@@ -50,11 +50,28 @@ async def lifespan(app: FastAPI):
     init_db()
     try:
         session = get_session()
-        reconciliar_dispositivos(session)
+        clientes = session.query(Cliente).all()
+        if clientes:
+            for cli in clientes:
+                try:
+                    reconciliar_dispositivos(session, cli.id)
+                    logger.info(f"Reconciliación completada para '{cli.nombre}' (ID {cli.id})")
+                    disp_count = session.query(Dispositivo).filter_by(cliente_id=cli.id).count()
+                    if disp_count > 0:
+                        try:
+                            res = descubrir_nuevos(session, cli.id)
+                            if res.get("nuevos", 0) > 0:
+                                logger.info(f"Auto-descubrimiento para '{cli.nombre}': {res['nuevos']} nuevo(s)")
+                        except Exception as e:
+                            logger.warning(f"Auto-descubrimiento omitido para '{cli.nombre}': {e}")
+                except Exception as e:
+                    logger.warning(f"Reconciliación omitida para '{cli.nombre}': {e}")
+            logger.info(f"Inicialización completada para {len(clientes)} cliente(s)")
+        else:
+            logger.info("No hay clientes. La interfaz mostrará opción de crear red al cargar.")
         session.close()
-        logger.info("Reconciliación inicial completada")
     except Exception as e:
-        logger.warning(f"Reconciliación inicial omitida: {e}")
+        logger.warning(f"Inicialización omitida: {e}")
     yield
 
 
@@ -71,6 +88,10 @@ if os.path.exists("frontend"):
 if os.path.exists("reportes"):
     app.mount("/reportes", StaticFiles(directory="reportes"), name="reportes")
 
+
+@app.get("/api/health")
+async def health():
+    return {"status": "ok", "api": "VigIA"}
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
@@ -486,12 +507,24 @@ async def listar_alertas(
     session = get_session()
     try:
         cid = get_or_create_cliente(session, nombre_cliente)
-        q = session.query(Alerta).filter_by(cliente_id=cid)
+        q = (
+            session.query(Alerta, Dispositivo.ip)
+            .outerjoin(Dispositivo, Alerta.dispositivo_id == Dispositivo.id)
+            .filter(Alerta.cliente_id == cid)
+        )
         if resuelta is not None:
-            q = q.filter_by(resuelta=resuelta)
+            q = q.filter(Alerta.resuelta == resuelta)
         if tipo:
-            q = q.filter_by(tipo=tipo)
-        return q.order_by(Alerta.timestamp.desc()).limit(200).all()
+            q = q.filter(Alerta.tipo == tipo)
+        rows = q.order_by(Alerta.timestamp.desc()).limit(200).all()
+        return [
+            AlertaOut(
+                id=a.id, cliente_id=a.cliente_id, dispositivo_id=a.dispositivo_id,
+                tipo=a.tipo, mensaje=a.mensaje, timestamp=a.timestamp,
+                resuelta=a.resuelta, analisis_ia=a.analisis_ia, ip=ip,
+            )
+            for a, ip in rows
+        ]
     finally:
         session.close()
 
@@ -574,20 +607,22 @@ async def stats(nombre_cliente: str = Query("red_cliente")):
     session = get_session()
     try:
         cid = get_or_create_cliente(session, nombre_cliente)
-        total = session.query(Dispositivo).filter_by(cliente_id=cid).count()
-        activos = session.query(Dispositivo).filter_by(cliente_id=cid, activo=1).count()
-        alertas_pend = session.query(Alerta).filter_by(cliente_id=cid, resuelta=0).count()
-        warn = session.query(Alerta).filter(Alerta.cliente_id == cid, Alerta.tipo == "latencia_alta", Alerta.resuelta == 0).count()
-        degradados = session.query(Alerta).filter(Alerta.cliente_id == cid, Alerta.tipo == "degradado", Alerta.resuelta == 0).count()
-        caidos = session.query(Alerta).filter(Alerta.cliente_id == cid, Alerta.tipo == "caida", Alerta.resuelta == 0).count()
-        total_pings = session.query(Ping).filter_by(cliente_id=cid).count()
+        total = session.query(func.count(Dispositivo.id)).filter_by(cliente_id=cid).scalar() or 0
+        activos = session.query(func.count(Dispositivo.id)).filter_by(cliente_id=cid, activo=1).scalar() or 0
+        total_pings = session.query(func.count(Ping.id)).filter_by(cliente_id=cid).scalar() or 0
+        alerta_row = session.query(
+            func.count(Alerta.id).label("pendientes"),
+            func.sum(case((Alerta.tipo == "latencia_alta", 1), else_=0)).label("warn"),
+            func.sum(case((Alerta.tipo == "degradado", 1), else_=0)).label("degradados"),
+            func.sum(case((Alerta.tipo == "caida", 1), else_=0)).label("caidos"),
+        ).filter(Alerta.cliente_id == cid, Alerta.resuelta == 0).first()
         return StatsOut(
             total_dispositivos=total,
             activos=activos,
-            warn=warn,
-            degradados=degradados,
-            caidos=caidos,
-            alertas_pendientes=alertas_pend,
+            warn=alerta_row.warn or 0,
+            degradados=alerta_row.degradados or 0,
+            caidos=alerta_row.caidos or 0,
+            alertas_pendientes=alerta_row.pendientes or 0,
             total_pings=total_pings,
         )
     finally:
@@ -632,9 +667,22 @@ async def scan_estado(nombre_cliente: str = "red_cliente"):
 
 
 @app.post("/api/discover")
-async def discover_nuevos(nombre_cliente: str = "red_cliente"):
+async def discover_nuevos(nombre_cliente: str = "red_cliente", todas: int = Query(0)):
     try:
         session = get_session()
+        if todas:
+            clientes = session.query(Cliente).all()
+            resultados_totales = {"nuevos": 0, "total": 0, "hosts": [], "por_cliente": {}}
+            for cli in clientes:
+                try:
+                    res = descubrir_nuevos(session, cli.id)
+                    resultados_totales["nuevos"] += res.get("nuevos", 0)
+                    resultados_totales["total"] += res.get("total", 0)
+                    resultados_totales["hosts"].extend(res.get("hosts", []))
+                    resultados_totales["por_cliente"][cli.nombre] = {"nuevos": res.get("nuevos", 0), "total": res.get("total", 0)}
+                except Exception as e:
+                    logger.warning(f"Descubrimiento falló para '{cli.nombre}': {e}")
+            return resultados_totales
         cid = get_or_create_cliente(session, nombre_cliente)
         resultado = descubrir_nuevos(session, cid)
         return resultado
@@ -744,15 +792,95 @@ async def seed_data(nombre_cliente: str = "demo"):
         session.close()
 
 
-@app.post("/api/reconciliar")
-async def reconciliar_red(
-    nombre_cliente: str = Query("red_cliente"),
+@app.post("/api/mac-vendor")
+async def agregar_mac_vendor(
+    body: dict,
     x_admin_key: str = Header(None),
 ):
     if x_admin_key != ADMIN_KEY:
         raise HTTPException(403, "Clave de seguridad inválida")
     session = get_session()
     try:
+        mac = body.get("mac", "").upper().strip()
+        vendor = body.get("vendor", "").strip()
+        confidence = body.get("confidence", 85)
+        if not mac or not vendor:
+            raise HTTPException(400, "mac y vendor son requeridos")
+        existente = session.query(MacVendorExact).filter_by(mac=mac).first()
+        creado = False
+        if existente:
+            existente.vendor = vendor
+            existente.confidence = confidence
+        else:
+            session.add(MacVendorExact(mac=mac, vendor=vendor, confidence=confidence))
+            creado = True
+        session.commit()
+        return {"ok": True, "creado": creado, "mac": mac, "vendor": vendor}
+    except HTTPException:
+        raise
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Error agregando MAC vendor: {e}")
+        raise HTTPException(500, f"Error: {str(e)}")
+    finally:
+        session.close()
+
+
+@app.post("/api/mac-vendor/import")
+async def importar_mac_vendor(
+    request: Request,
+    x_admin_key: str = Header(None),
+):
+    if x_admin_key != ADMIN_KEY:
+        raise HTTPException(403, "Clave de seguridad inválida")
+    session = get_session()
+    try:
+        body = await request.json()
+        entries = body.get("entries", [])
+        insertados = 0
+        actualizados = 0
+        for entry in entries:
+            mac = entry.get("mac", "").upper().strip()
+            vendor = entry.get("vendor", "").strip()
+            confidence = entry.get("confidence", 85)
+            if not mac or not vendor:
+                continue
+            existente = session.query(MacVendorExact).filter_by(mac=mac).first()
+            if existente:
+                existente.vendor = vendor
+                existente.confidence = confidence
+                actualizados += 1
+            else:
+                session.add(MacVendorExact(mac=mac, vendor=vendor, confidence=confidence))
+                insertados += 1
+        session.commit()
+        return {"ok": True, "insertados": insertados, "actualizados": actualizados}
+    except Exception as e:
+        session.rollback()
+        logger.error(f"Error importando MAC: {e}")
+        raise HTTPException(500, f"Error: {str(e)}")
+    finally:
+        session.close()
+
+
+@app.post("/api/reconciliar")
+async def reconciliar_red(
+    nombre_cliente: str = Query("red_cliente"),
+    todas: int = Query(0),
+    x_admin_key: str = Header(None),
+):
+    if x_admin_key != ADMIN_KEY:
+        raise HTTPException(403, "Clave de seguridad inválida")
+    session = get_session()
+    try:
+        if todas:
+            clientes = session.query(Cliente).all()
+            totales = {"corregidos_tipo": 0, "corregidos_fab": 0, "api_resueltos": 0, "port_resueltos": 0, "hostnames_resueltos": 0}
+            for cli in clientes:
+                res = reconciliar_dispositivos(session, cli.id)
+                for k in totales:
+                    totales[k] += res.get(k, 0)
+            return {"ok": True, **totales}
         cid = get_or_create_cliente(session, nombre_cliente)
         res = reconciliar_dispositivos(session, cid)
         return {

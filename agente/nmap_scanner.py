@@ -4,6 +4,8 @@ import math
 import os
 import re
 import socket
+import time
+import threading
 import httpx
 import nmap
 from datetime import datetime
@@ -32,6 +34,32 @@ def _mac_local(ip: str) -> str:
                 return mac
     except Exception:
         pass
+    try:
+        out = os.popen("ip -o link show | grep -v 'LOOPBACK' 2>/dev/null").read()
+        for line in out.strip().split("\n"):
+            parts = line.split()
+            for i, p in enumerate(parts):
+                if p == "link/ether" and i + 1 < len(parts):
+                    return parts[i + 1]
+    except Exception:
+        pass
+    return ""
+
+
+def _ip_local() -> str:
+    iface = _iface_red()
+    if iface:
+        out = os.popen(f"ip -o -4 addr show {iface} 2>/dev/null").read().strip()
+        m = re.search(r"inet (\d+\.\d+\.\d+\.\d+)", out)
+        if m:
+            return m.group(1)
+    try:
+        out = os.popen("ip -o -4 addr show | grep -v ' lo ' 2>/dev/null").read().strip()
+        m = re.search(r"inet (\d+\.\d+\.\d+\.\d+)", out)
+        if m:
+            return m.group(1)
+    except Exception:
+        pass
     return ""
 
 
@@ -48,6 +76,14 @@ def _iface_red() -> str:
         m = re.search(r"(\S+)\s*$", out)
         if m:
             return m.group(1)
+    except Exception:
+        pass
+    try:
+        out = os.popen("ip -o link show | grep -v 'LOOPBACK' | awk -F': ' '{print $2}' 2>/dev/null").read()
+        for line in out.strip().split("\n"):
+            iface = line.strip()
+            if iface and iface != "lo":
+                return iface
     except Exception:
         pass
     return ""
@@ -166,7 +202,6 @@ VENDOR_OUI = {
     "24:4B:FE": "Asus",
     "28:2C:B2": "Asus",
     "40:16:9E": "Asus",
-    "50:C7:BF": "Asus",
     "54:04:A6": "Asus",
     "5C:DC:96": "Asus",
     "60:92:17": "Asus",
@@ -190,7 +225,6 @@ VENDOR_OUI = {
     "A0:14:3D": "Netgear",
     "A0:40:41": "Netgear",
     "B0:39:56": "Netgear",
-    "C0:3F:0E": "Netgear",
     "D0:37:45": "Netgear",
     "DC:EF:09": "Netgear",
     "E0:3C:E6": "Netgear",
@@ -216,7 +250,6 @@ VENDOR_OUI = {
     "04:12:34": "Dahua",
     "AC:CC:12": "Dahua",
     "3C:07:54": "Dahua",
-    "E0:3C:E6": "Dahua",
     "9C:EB:E8": "Dahua",
     "A0:BD:1D": "Dahua",
     "00:08:5D": "Hikvision",
@@ -259,10 +292,7 @@ VENDOR_OUI = {
     "00:23:AE": "Samsung",
     "A4:77:33": "Xiaomi",
     "00:27:10": "Xiaomi",
-    "18:FE:34": "OnePlus",
     "9C:FC:E8": "OnePlus",
-    "E8:48:B8": "Xiaomi",
-    "00:25:9E": "Huawei",
     "5C:02:72": "Samsung",
     "9C:28:EF": "Samsung",
     "7C:11:BE": "Google",
@@ -299,7 +329,6 @@ VENDOR_OUI = {
     "00:1B:21": "Intel",
     "00:1E:67": "Intel",
     "00:1F:3C": "Intel",
-    "00:1F:29": "Intel",
     "00:24:D6": "Intel",
     "00:26:55": "Intel",
     "00:26:C6": "Intel",
@@ -315,9 +344,7 @@ VENDOR_OUI = {
     "E0:B9:BA": "Intel",
     "F0:1F:AF": "Intel",
     "00:E0:4C": "Realtek",
-    "00:E0:4C": "Realtek",
     "08:00:27": "Realtek",
-    "10:BF:48": "Realtek",
     "52:54:00": "Realtek",
     "74:DA:EA": "Realtek",
     "9C:2E:A1": "Realtek",
@@ -330,7 +357,6 @@ VENDOR_OUI = {
     "00:1B:11": "Broadcom",
     "00:23:68": "Broadcom",
     "14:10:9F": "Broadcom",
-    "3C:07:54": "Broadcom",
     "6C:3B:6B": "Broadcom",
     "A4:1F:72": "Broadcom",
     "AC:84:C6": "Broadcom",
@@ -366,47 +392,27 @@ VENDOR_OUI = {
     "84:DB:2F": "Qualcomm/Atheros",
     "8C:7B:9D": "Qualcomm/Atheros",
     "94:B9:7E": "Qualcomm/Atheros",
-    "A0:F3:C1": "Qualcomm/Atheros",
     "AC:14:61": "Qualcomm/Atheros",
     "B0:48:7A": "Qualcomm/Atheros",
     "B8:3E:59": "Qualcomm/Atheros",
-    "C0:4A:00": "Qualcomm/Atheros",
-    "C8:3A:35": "Qualcomm/Atheros",
-    "CC:B2:55": "Qualcomm/Atheros",
-    "D0:37:45": "Qualcomm/Atheros",
-    "D4:6E:0E": "Qualcomm/Atheros",
-    "D8:0D:17": "Qualcomm/Atheros",
     "D8:96:95": "Qualcomm/Atheros",
     "40:8D:0A": "Ralink",
     "00:0C:43": "Ralink",
     "00:1F:1F": "Ralink",
     "04:0C:CE": "Ralink",
-    "14:CF:92": "Ralink",
-    "1C:5F:2B": "Ralink",
     "28:28:5D": "Ralink",
     "2C:B0:5D": "Ralink",
     "3C:7A:8A": "Ralink",
     "50:3E:AA": "Ralink",
     "54:E6:FC": "Ralink",
-    "64:0F:28": "Ralink",
-    "68:2E:2B": "Ralink",
-    "74:DA:EA": "Ralink",
-    "84:C7:EA": "Ralink",
     "8C:A6:DF": "Ralink",
     "94:D9:B3": "Ralink",
-    "B0:48:7A": "Ralink",
     "B8:7C:6F": "Ralink",
     "BC:F6:85": "Ralink",
-    "C0:3F:0E": "Ralink",
-    "C8:3A:35": "Ralink",
     "D4:CA:6D": "Ralink",
     "D8:1C:79": "Ralink",
-    "E0:3C:E6": "Ralink",
     "E4:D3:32": "Ralink",
     "F0:2F:74": "Ralink",
-    "F4:3F:2B": "Ralink",
-    "F4:EC:38": "Ralink",
-    "F8:0D:43": "Ralink",
     "FC:2F:40": "Ralink",
 
     # ── PCs / Laptops / Servidores ──
@@ -416,14 +422,12 @@ VENDOR_OUI = {
     "00:1A:1B": "Dell",
     "00:1C:23": "Dell",
     "00:21:70": "Dell",
-    "08:00:27": "Dell",
     "14:18:77": "Dell",
     "18:03:73": "Dell",
     "34:81:72": "Dell",
     "54:E0:32": "Dell",
     "98:4B:E1": "Dell",
     "B8:AC:6F": "Dell",
-    "F0:1F:AF": "Dell",
     "74:4C:A1": "Lenovo",
     "00:1A:4B": "Lenovo",
     "38:2C:4A": "Lenovo",
@@ -435,28 +439,16 @@ VENDOR_OUI = {
     "B8:8D:12": "Lenovo",
     "E4:1F:13": "Lenovo",
     "F4:0F:24": "Lenovo",
-    "00:1A:A0": "HP",
-    "3C:52:82": "HP",
-    "F0:DE:F1": "HP",
     "14:99:E2": "HP",
     "2C:FD:A1": "HP",
-    "4C:5F:70": "HP",
     "5C:95:AE": "HP",
     "64:8A:6F": "HP",
     "84:A9:3E": "HP",
     "9C:8C:6E": "HP",
-    "A0:21:B7": "HP",
     "A0:5E:6B": "HP",
     "B8:6B:23": "HP",
     "E0:07:1B": "HP",
     "E8:39:35": "HP",
-    "00:1F:29": "Asus",
-    "10:BF:48": "Asus",
-    "14:2D:7E": "Asus",
-    "1C:87:2C": "Asus",
-    "28:2C:B2": "Asus",
-    "5C:DC:96": "Asus",
-    "80:32:53": "Asus",
     "AC:22:0B": "Asus",
     "B0:6A:2A": "Asus",
     "B8:5A:F7": "Asus",
@@ -465,27 +457,19 @@ VENDOR_OUI = {
     "00:17:31": "Acer",
     "00:1B:B9": "Acer",
     "00:23:8B": "Acer",
-    "2C:33:11": "Acer",
     "38:E7:D8": "Acer",
-    "50:3E:AA": "Acer",
-    "80:3F:5D": "Acer",
-    "B0:39:56": "Acer",
     "00:0C:29": "VMware",
     "00:50:56": "VMware",
     "00:1C:14": "VMware",
     "00:0F:4B": "Xen",
     "00:16:3E": "Xen",
-    "08:00:27": "Oracle/VirtualBox",
     "00:11:32": "Synology",
     "00:0F:E2": "QNAP",
-    "24:5E:BE": "QNAP",
     "00:1C:B3": "Supermicro",
-    "08:3E:8E": "Supermicro",
     "3C:EC:EF": "Supermicro",
     "00:25:90": "Microsoft",
     "00:15:5D": "Microsoft/Hyper-V",
     "00:03:FF": "Microsoft/Hyper-V",
-    "08:00:27": "PCS Systemtechnik",
 
     # ── IoT / Raspberries ──
     "38:F3:AB": "Raspberry Pi",
@@ -498,7 +482,6 @@ VENDOR_OUI = {
     "84:0D:8E": "Arduino",
     "A4:CF:12": "ESPressif",
     "24:6F:28": "ESPressif",
-    "18:FE:34": "ESPressif",
     "5C:CF:7F": "ESPressif",
     "EC:FA:BC": "ESPressif",
     "AC:D0:74": "ESPressif",
@@ -513,9 +496,6 @@ VENDOR_OUI = {
     "00:04:4B": "NVIDIA",
     "48:B0:2D": "NVIDIA",
     "34:6F:24": "Intelbras",
-    "48:22:54": "Intelbras",
-    "74:4C:A1": "Intelbras",
-    "80:32:53": "Intelbras",
 }
 
 
@@ -596,6 +576,25 @@ def _oui_de_mac(mac: str) -> str:
     return ":".join(partes[:3]) if len(partes) >= 3 else ""
 
 
+_api_semaphore = threading.Semaphore(1)
+_api_last_call = 0.0
+
+def _api_lookup(mac_norm: str) -> str | None:
+    global _api_last_call
+    with _api_semaphore:
+        now = time.time()
+        if now - _api_last_call < 1.0:
+            time.sleep(1.0 - (now - _api_last_call))
+        _api_last_call = time.time()
+        try:
+            r = httpx.get(f"https://api.macvendors.com/{mac_norm}", timeout=5.0)
+            if r.status_code == 200:
+                return r.text.strip()
+        except Exception:
+            pass
+        return None
+
+
 def resolve_vendor(mac: str, open_ports: list = None, reconcile: bool = False) -> dict:
     if not mac or mac == "00:00:00:00:00:00":
         return {"vendor": None, "method": None, "confidence": 0}
@@ -625,22 +624,30 @@ def resolve_vendor(mac: str, open_ports: list = None, reconcile: bool = False) -
         if ieee:
             return {"vendor": ieee.vendor, "method": "oui_ieee", "confidence": ieee.confidence or 70}
 
+        # 4. Puerto heuristic (desde BD)
+        if open_ports:
+            port_rules = session.query(PortHeuristic).all()
+            if port_rules:
+                vendor_ports = {}
+                for rule in port_rules:
+                    if rule.puerto in [p.get("puerto") for p in open_ports if p.get("protocolo", "tcp") == rule.protocolo]:
+                        if rule.vendor not in vendor_ports or rule.confidence > vendor_ports[rule.vendor]:
+                            vendor_ports[rule.vendor] = rule.confidence
+                if vendor_ports:
+                    best = max(vendor_ports, key=vendor_ports.get)
+                    return {"vendor": best, "method": "port_heuristic", "confidence": vendor_ports[best]}
+
     finally:
         session.close()
 
-    # 4. API externa (solo en reconciliación)
+    # 5. API externa (solo en reconciliación, con rate-limit)
     if reconcile:
-        try:
-            r = httpx.get(f"https://api.macvendors.com/{mac_norm}", timeout=5.0)
-            if r.status_code == 200:
-                vendor = r.text.strip()
-                if vendor:
-                    _cachear_api_result(mac_norm, oui, vendor)
-                    return {"vendor": vendor, "method": "api_lookup", "confidence": 85}
-        except Exception:
-            pass
+        vendor = _api_lookup(mac_norm)
+        if vendor:
+            _cachear_api_result(mac_norm, oui, vendor)
+            return {"vendor": vendor, "method": "api_lookup", "confidence": 85}
 
-    # 5. Puerto heuristic
+    # 6. Puerto heuristic (fallback hardcodeado si BD vacía)
     if open_ports:
         vendor_ports = {}
         for port, proto, vnd, conf in PORT_HEURISTIC:
@@ -705,6 +712,9 @@ def _cachear_api_result(mac: str, oui: str, vendor: str):
         existente = session.query(OuiVendor).filter_by(oui=oui, source="custom").first()
         if not existente:
             session.add(OuiVendor(oui=oui, vendor=vendor, source="custom", confidence=80))
+        exact = session.query(MacVendorExact).filter_by(mac=mac).first()
+        if not exact:
+            session.add(MacVendorExact(mac=mac, vendor=vendor, confidence=85))
         session.commit()
     except Exception:
         session.rollback()
@@ -719,7 +729,7 @@ def _es_mac_aleatoria(mac: str) -> bool:
         return False
 
 
-def detectar_fabricante(mac: str, vendor_nmap: str = "", hostname: str = "") -> str:
+def detectar_fabricante(mac: str, vendor_nmap: str = "", hostname: str = "", session=None) -> str:
     if vendor_nmap and vendor_nmap.strip():
         return vendor_nmap.strip()
     if hostname:
@@ -727,6 +737,20 @@ def detectar_fabricante(mac: str, vendor_nmap: str = "", hostname: str = "") -> 
         for patron, marca in HOSTNAME_FABRICANTE:
             if h.startswith(patron) or patron in h:
                 return marca
+    # Consultar BD antes del dict hardcodeado
+    if mac and session:
+        mac_norm = _normalizar_mac(mac)
+        exact = session.query(MacVendorExact).filter_by(mac=mac_norm).first()
+        if exact:
+            return exact.vendor
+        oui = _oui_de_mac(mac_norm)
+        if oui:
+            custom = session.query(OuiVendor).filter_by(oui=oui, source="custom").first()
+            if custom:
+                return custom.vendor
+            ieee = session.query(OuiVendor).filter_by(oui=oui, source="ieee").first()
+            if ieee:
+                return ieee.vendor
     prefix = mac.upper()[:8] if mac else ""
     if prefix in VENDOR_OUI:
         return VENDOR_OUI[prefix]
@@ -742,8 +766,11 @@ SERVICIO_A_TIPO = {
     "ssh": "servidor",
     "rtsp": "camara",
     "onvif": "camara",
+    "rtmp": "camara",
+    "hls": "camara",
     "snmp": "router",
     "dhcp": "router",
+    "dhcpv6": "router",
     "dns": "servidor",
     "domain": "servidor",
     "kerberos": "servidor",
@@ -760,10 +787,33 @@ SERVICIO_A_TIPO = {
     "nfs": "servidor",
     "ipp": "impresora",
     "printer": "impresora",
+    "mqtt": "servidor",
+    "telnet": "router",
+    "mongodb": "servidor",
+    "redis": "servidor",
+    "memcached": "servidor",
+    "cassandra": "servidor",
+    "couchdb": "servidor",
+    "vnc": "servidor",
+    "x11": "servidor",
+    "docker": "servidor",
+    "kubernetes": "servidor",
+    "etcd": "servidor",
+    "consul": "servidor",
+    "nvr": "camara",
+    "ntp": "router",
+    "rip": "router",
+    "ospf": "router",
+    "bgp": "router",
+    "bacnet": "router",
+    "modbus": "router",
+    "dnp3": "router",
+    "iec104": "router",
+    "sip": "servidor",
 }
 
 
-PRIORIDAD_TIPO = {"router": 5, "camara": 5, "computadora": 4, "impresora": 4, "servidor": 3, "dispositivo": 1, "desconocido": 0}
+PRIORIDAD_TIPO = {"camara": 6, "router": 5, "computadora": 4, "impresora": 4, "servidor": 3, "dispositivo": 1, "desconocido": 0}
 PC_BRANDS = {"Lenovo", "Dell", "HP", "Asus", "Acer", "Apple", "Microsoft"}
 
 
@@ -816,7 +866,7 @@ def _detectar_segmento(rango_ip: str) -> str:
 def _escáner_un_rango(nm, rango: str, timeout: int) -> list[dict]:
     rango = str(rango).strip()
     iface = _iface_red()
-    args = f"-sn -n -T4 --max-retries 3 -e {iface}" if iface else "-sn -n -T4 --max-retries 3 -e wlp4s0"
+    args = f"-sn -n -T4 --max-retries 3 -e {iface}" if iface else "-sn -n -T4 --max-retries 3"
     nm.scan(hosts=rango, arguments=args)
     hosts = []
     for ip in nm.all_hosts():
@@ -937,6 +987,11 @@ def escanear(rango_ip: str, nombre_cliente: str, timeout: int = 300) -> dict:
             logger.info(f"Escaneando {rango} ...")
             hosts_info.extend(_escáner_un_rango(nm, rango, timeout))
 
+        local_ip = _ip_local()
+        local_mac = _mac_local(local_ip)
+        if local_ip and local_mac and not any(h["ip"] == local_ip for h in hosts_info):
+            hosts_info.append({"ip": local_ip, "mac": local_mac, "fabricante": detectar_fabricante(local_mac)})
+
         hosts_info_dict = {}
         for h in hosts_info:
             hosts_info_dict[h["ip"]] = h
@@ -951,7 +1006,7 @@ def escanear(rango_ip: str, nombre_cliente: str, timeout: int = 300) -> dict:
         for ip in hosts_descubiertos:
             info = hosts_info_dict.get(ip, {})
             mac = info.get("mac", "") or _mac_arp(ip) or _mac_local(ip)
-            fabricante = info.get("fabricante", "") or detectar_fabricante(mac, info.get("vendor", ""))
+            fabricante = info.get("fabricante", "") or detectar_fabricante(mac, info.get("vendor", ""), session=session)
             if not fabricante and mac:
                 vr = resolve_vendor(mac)
                 if vr and vr.get("vendor"):
@@ -1004,9 +1059,9 @@ def escanear(rango_ip: str, nombre_cliente: str, timeout: int = 300) -> dict:
             if "addresses" in host_data:
                 mac = host_data["addresses"].get("mac", "") or mac
                 if "vendor" in host_data and mac in host_data["vendor"]:
-                    fabricante = detectar_fabricante(mac, host_data["vendor"][mac], hostname)
+                    fabricante = detectar_fabricante(mac, host_data["vendor"][mac], hostname, session=session)
             if mac and not fabricante:
-                fabricante = detectar_fabricante(mac, hostname=hostname)
+                fabricante = detectar_fabricante(mac, hostname=hostname, session=session)
 
             # Fallback de fabricante por SO detectado
             if not fabricante and so_detectado:
@@ -1105,6 +1160,51 @@ def escanear(rango_ip: str, nombre_cliente: str, timeout: int = 300) -> dict:
         session.close()
 
 
+def _detectar_subred_local() -> str | None:
+    """Detecta la subred local desde la interfaz de red por defecto.
+    Útil cuando la BD está vacía y no hay segmentos conocidos."""
+    iface = _iface_red()
+    if not iface:
+        return None
+    try:
+        out = os.popen(f"ip -o -4 addr show {iface} 2>/dev/null").read()
+        m = re.search(r"inet (\d+\.\d+\.\d+\.\d+)/(\d+)", out)
+        if m:
+            ip_str, prefix = m.group(1), int(m.group(2))
+            mask = (0xFFFFFFFF << (32 - prefix)) & 0xFFFFFFFF
+            ip_int = sum(int(o) << (24 - 8 * i) for i, o in enumerate(ip_str.split(".")))
+            network = ip_int & mask
+            octs = [(network >> (24 - 8 * i)) & 0xFF for i in range(4)]
+            return f"{octs[0]}.{octs[1]}.{octs[2]}.0/24"
+        return None
+    except Exception:
+        return None
+
+
+def _incluir_host_local(session, cid, ips_existentes, resultados):
+    local_ip = _ip_local()
+    local_mac = _mac_local(local_ip)
+    if local_ip and local_mac and local_ip not in ips_existentes and local_ip not in {r["ip"] for r in resultados}:
+        fabricante = detectar_fabricante(local_mac, session=session)
+        hr = resolve_hostname(local_ip)
+        vr = None
+        if local_mac and (not fabricante or fabricante == "desconocido"):
+            vr = resolve_vendor(local_mac, reconcile=True)
+        disp, upd = _agregar_o_actualizar(
+            session, local_ip, "", local_mac, fabricante,
+            "servidor", [], None, None, cid,
+            vendor_result=vr, hostname_result=hr,
+        )
+        hname = hr["hostname"] if hr and hr.get("hostname") else ""
+        fab_final = fabricante
+        if (not fab_final or fab_final == "desconocido") and vr and vr.get("vendor"):
+            fab_final = vr["vendor"]
+        resultados.append({"ip": local_ip, "mac": local_mac, "hostname": hname, "fabricante": fab_final, "nuevo": True})
+        logger.info(f"Host local auto-incluido: {local_ip} ({local_mac})")
+        return not upd
+    return False
+
+
 def descubrir_nuevos(session, cid: int) -> dict:
     """Descubre equipos nuevos en las subredes conocidas usando nmap -sn (ARP ping sweep).
     No escanea puertos ni hace detección de SO, solo descubre IPs activas."""
@@ -1117,12 +1217,24 @@ def descubrir_nuevos(session, cid: int) -> dict:
     )
     segmentos = sorted(set(r[0] for r in segmentos if r[0]))
     if not segmentos:
-        logger.warning("No hay segmentos conocidos para descubrir nuevos equipos")
-        return {"nuevos": 0, "total": 0, "hosts": []}
+        subred_local = _detectar_subred_local()
+        if subred_local:
+            logger.info(f"No hay segmentos en BD, usando subred local detectada: {subred_local}")
+            segmentos = [subred_local]
+        else:
+            logger.warning("No hay segmentos conocidos y no se pudo detectar subred local")
+            return {"nuevos": 0, "total": 0, "hosts": []}
 
     nm = nmap.PortScanner()
     ips_existentes = {d.ip for d in session.query(Dispositivo.ip).filter_by(cliente_id=cid).all()}
+    macs_existentes = {
+        d.mac for d in session.query(Dispositivo.mac)
+        .filter_by(cliente_id=cid)
+        .filter(Dispositivo.mac.isnot(None))
+        .all() if d.mac
+    }
     nuevos = 0
+    actualizados_mac = 0
     resultados = []
 
     for seg in segmentos:
@@ -1139,30 +1251,71 @@ def descubrir_nuevos(session, cid: int) -> dict:
                     mac = nm[ip]["addresses"].get("mac", "")
                 if "vendor" in nm[ip] and mac in nm[ip]["vendor"]:
                     vendor = nm[ip]["vendor"][mac]
-                fabricante = detectar_fabricante(mac, vendor)
+
+                if mac and mac in macs_existentes:
+                    existente = session.query(Dispositivo).filter_by(mac=mac, cliente_id=cid).first()
+                    if existente and existente.ip != ip:
+                        old_ip = existente.ip
+                        existente.ip = ip
+                        existente.ultima_vez = datetime.now()
+                        ips_existentes.add(ip)
+                        actualizados_mac += 1
+                        logger.info(f"MAC {mac} cambió IP: {old_ip} → {ip}")
+                        resultados.append({
+                            "ip": ip, "mac": mac,
+                            "hostname": existente.hostname or "",
+                            "fabricante": existente.fabricante or "",
+                            "nuevo": False, "ip_anterior": old_ip,
+                        })
+                        continue
+
+                fabricante = detectar_fabricante(mac, vendor, session=session)
                 hr = resolve_hostname(ip)
+                vr = None
+                if mac and (not fabricante or fabricante == "desconocido"):
+                    vr = resolve_vendor(mac, reconcile=True)
                 disp, upd = _agregar_o_actualizar(
                     session, ip, "", mac, fabricante,
                     "dispositivo", [], None, None, cid,
+                    vendor_result=vr,
                     hostname_result=hr,
                 )
                 if not upd:
                     nuevos += 1
                 hname = hr["hostname"] if hr and hr.get("hostname") else ""
-                resultados.append({"ip": ip, "mac": mac, "hostname": hname, "fabricante": fabricante, "nuevo": not upd})
+                fab_final = fabricante
+                if (not fab_final or fab_final == "desconocido") and vr and vr.get("vendor"):
+                    fab_final = vr["vendor"]
+                resultados.append({"ip": ip, "mac": mac, "hostname": hname, "fabricante": fab_final, "nuevo": not upd})
                 ips_existentes.add(ip)
+                if mac:
+                    macs_existentes.add(mac)
         except Exception as e:
             logger.warning(f"Error escaneando segmento {seg}: {e}")
             continue
 
-    if nuevos:
+    if _incluir_host_local(session, cid, ips_existentes, resultados):
+        nuevos += 1
+
+    if nuevos or actualizados_mac:
         session.commit()
-        logger.info(f"Descubrimiento: {nuevos} nuevos equipos en {len(segmentos)} segmentos")
+        logger.info(f"Descubrimiento: {nuevos} nuevos, {actualizados_mac} actualizados por MAC en {len(segmentos)} segmentos")
     return {"nuevos": nuevos, "total": len(resultados), "hosts": resultados}
 
 
 def reconciliar_dispositivos(session: Session, cid: int = 0) -> dict:
-    dispositivos = session.query(Dispositivo).filter_by(activo=1, cliente_id=cid).all()
+    if cid == 0:
+        from backend.models import Cliente
+        clientes = session.query(Cliente).all()
+        totales = {"corregidos_tipo": 0, "corregidos_fab": 0, "api_resueltos": 0, "port_resueltos": 0, "hostnames_resueltos": 0}
+        for cli in clientes:
+            res = reconciliar_dispositivos(session, cli.id)
+            for k in totales:
+                totales[k] += res.get(k, 0)
+        if totales["corregidos_tipo"] or totales["corregidos_fab"] or totales["hostnames_resueltos"]:
+            session.commit()
+        return totales
+    dispositivos = session.query(Dispositivo).filter_by(cliente_id=cid).all()
     corregidos_tipo = 0
     corregidos_fab = 0
     api_resueltos = 0
@@ -1171,14 +1324,42 @@ def reconciliar_dispositivos(session: Session, cid: int = 0) -> dict:
     for d in dispositivos:
         cambios = False
         tipo_actual = d.tipo or ""
-        tipo_hostname = detectar_tipo_por_hostname(d.hostname or "")
         servicios_db = session.query(Servicio).filter_by(dispositivo_id=d.id).all()
         nombres_servicios = list({s.servicio for s in servicios_db if s.servicio and s.estado == "abierto"})
-        tipo_servicios = detectar_tipo(nombres_servicios)
-        mejor_tipo = ""
-        for cand in [tipo_hostname, tipo_servicios]:
-            if cand and PRIORIDAD_TIPO.get(cand, 0) > PRIORIDAD_TIPO.get(mejor_tipo, -1):
-                mejor_tipo = cand
+        puertos_abiertos = [s.puerto for s in servicios_db if s.estado == "abierto"]
+
+        # T2: override si tiene RTSP (es camara fijo)
+        if 554 in puertos_abiertos or "onvif" in nombres_servicios or "rtsp" in nombres_servicios:
+            mejor_tipo = "camara"
+        else:
+            tipo_hostname = detectar_tipo_por_hostname(d.hostname or "")
+            tipo_servicios = detectar_tipo(nombres_servicios)
+            mejor_tipo = ""
+            for cand in [tipo_hostname, tipo_servicios]:
+                if cand and PRIORIDAD_TIPO.get(cand, 0) > PRIORIDAD_TIPO.get(mejor_tipo, -1):
+                    mejor_tipo = cand
+
+        # T3: detectar tipo por SNMP sysDescr si aún no hay tipo definido
+        if not mejor_tipo and _SNMP_DISPONIBLE and d.activo == 1:
+            try:
+                info = obtener_info_dispositivo(d.ip)
+                if info and info.get("descripcion"):
+                    desc = info["descripcion"].lower()
+                    if any(k in desc for k in ("router", "switch", "gateway", "access point", "ap")):
+                        mejor_tipo = "router"
+                    elif any(k in desc for k in ("camera", "camara", "nvr", "dvr", "ipcam")):
+                        mejor_tipo = "camara"
+                    elif any(k in desc for k in ("printer", "mfp", "laserjet", "officejet")):
+                        mejor_tipo = "impresora"
+                    elif any(k in desc for k in ("server", "storage", "nas", "rack", "proliant", "poweredge")):
+                        mejor_tipo = "servidor"
+                    elif any(k in desc for k in ("computer", "pc", "workstation", "laptop", "notebook", "desktop")):
+                        mejor_tipo = "computadora"
+                    if not d.descripcion:
+                        d.descripcion = info["descripcion"]
+            except Exception:
+                pass
+
         if mejor_tipo and PRIORIDAD_TIPO.get(mejor_tipo, 0) > PRIORIDAD_TIPO.get(tipo_actual, -1):
             d.tipo = mejor_tipo
             corregidos_tipo += 1
@@ -1201,15 +1382,17 @@ def reconciliar_dispositivos(session: Session, cid: int = 0) -> dict:
                 elif res["method"] == "oui_custom" or res["method"] == "oui_ieee":
                     pass
 
-        hostname_actual = d.hostname or ""
-        if not hostname_actual:
-            hr = resolve_hostname(d.ip)
-            if hr and hr.get("hostname"):
-                d.hostname = hr["hostname"]
-                d.hostname_method = hr["method"]
-                d.hostname_confidence = hr["confidence"]
-                hostnames_resueltos += 1
-                cambios = True
+        # T4: resolver hostname solo si está activo
+        if d.activo == 1:
+            hostname_actual = d.hostname or ""
+            if not hostname_actual:
+                hr = resolve_hostname(d.ip)
+                if hr and hr.get("hostname"):
+                    d.hostname = hr["hostname"]
+                    d.hostname_method = hr["method"]
+                    d.hostname_confidence = hr["confidence"]
+                    hostnames_resueltos += 1
+                    cambios = True
 
         if d.tipo == "camara" and d.fabricante in PC_BRANDS:
             d.tipo = "servidor"

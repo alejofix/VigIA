@@ -10,12 +10,7 @@ from backend.models import Dispositivo, Ping, Alerta
 @pytest.fixture(autouse=True)
 def override_db():
     tmp_dir = tempfile.mkdtemp()
-    import backend.database as db_mod
-    db_mod.DB_PATH = tmp_dir + "/"
-    from backend.main import DB_ACTIVA
-    import backend.main as main_mod
     test_db = os.path.join(tmp_dir, "test.db")
-    main_mod.DB_ACTIVA = test_db
     init_db(test_db)
     yield
     import shutil
@@ -28,8 +23,7 @@ client = TestClient(app)
 
 
 def _session():
-    from backend.main import DB_ACTIVA
-    return get_session(DB_ACTIVA)()
+    return get_session()()
 
 
 def test_root():

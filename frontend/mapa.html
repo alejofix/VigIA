@@ -8,7 +8,7 @@
 // === CONFIGURACIÓN ===
 // MODO_XAMPP = true:  frontend servido por Apache (XAMPP), backend Python en PUERTO_BACKEND
 // MODO_XAMPP = false: backend Python sirve todo (puerto 8080)
-var MODO_XAMPP = true;
+var MODO_XAMPP = false;
 var PUERTO_BACKEND = 8080;
 // =====================
 
@@ -953,17 +953,17 @@ function speedtestM() {
     var pollId = setInterval(function() {
       apiFetch('/api/speedtest/estado/' + data.task_id, { sinCliente: true }).then(function(res) {
         if (res.estado === 'completo') {
-          clearInterval(poll);
+          clearInterval(pollId);
           sp.innerHTML = '⬇ ' + res.download_mbps + ' <span style=\"color:var(--muted);\">|</span> ⬆ ' + res.upload_mbps + ' <span style=\"color:var(--muted);\">|</span> ⏱ ' + res.ping_ms + ' ms <span style=\"color:var(--muted);font-size:8px;\">' + res.servidor + '</span>';
           btn.textContent = '🚀 Speed';
           btn.disabled = false;
         } else if (res.estado === 'error') {
-          clearInterval(poll);
+          clearInterval(pollId);
           sp.textContent = '⚠ Error: ' + (res.error || 'desconocido');
           btn.textContent = '🚀 Speed';
           btn.disabled = false;
         }
-      }).catch(function() { clearInterval(poll); sp.textContent = ''; sp.style.display = 'none'; btn.textContent = '🚀 Speed'; btn.disabled = false; });
+      }).catch(function() { clearInterval(pollId); sp.textContent = ''; sp.style.display = 'none'; btn.textContent = '🚀 Speed'; btn.disabled = false; });
     }, 2000);
   }).catch(function(e) {
     sp.textContent = '⚠ Error: ' + e.message;
