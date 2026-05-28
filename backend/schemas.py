@@ -127,3 +127,16 @@ class CredencialOut(BaseModel):
     usuario: Optional[str] = ""
     app_pass: Optional[str] = ""
     observacion: Optional[str] = ""
+
+
+class SegmentoExtraCreate(BaseModel):
+    rango: str
+    descripcion: Optional[str] = ""
+
+
+class SegmentoExtraOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    cliente_id: int
+    rango: str
+    descripcion: Optional[str] = None

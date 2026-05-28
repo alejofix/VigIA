@@ -357,13 +357,14 @@ async function sincronizarCliente() {
   try {
     var res = await apiFetch('/api/clientes', { sinCliente: true });
     var actual = document.getElementById('clienteBadge').dataset.cliente;
-    if (res.clientes.length > 0) {
+    var nombres = res.clientes.map(function(c) { return c.nombre; });
+    if (nombres.length > 0) {
       if (!actual) {
-        document.getElementById('clienteBadge').dataset.cliente = res.clientes[0];
-        document.getElementById('clienteNombre').textContent = res.clientes[0];
-      } else if (!res.clientes.includes(actual)) {
-        document.getElementById('clienteBadge').dataset.cliente = res.clientes[0];
-        document.getElementById('clienteNombre').textContent = res.clientes[0];
+        document.getElementById('clienteBadge').dataset.cliente = nombres[0];
+        document.getElementById('clienteNombre').textContent = nombres[0];
+      } else if (nombres.indexOf(actual) === -1) {
+        document.getElementById('clienteBadge').dataset.cliente = nombres[0];
+        document.getElementById('clienteNombre').textContent = nombres[0];
       }
     }
   } catch (_) {}

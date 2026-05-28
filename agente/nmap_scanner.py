@@ -1205,9 +1205,10 @@ def _incluir_host_local(session, cid, ips_existentes, resultados):
     return False
 
 
-def descubrir_nuevos(session, cid: int) -> dict:
+def descubrir_nuevos(session, cid: int, segmentos_extra: list = None) -> dict:
     """Descubre equipos nuevos en las subredes conocidas usando nmap -sn (ARP ping sweep).
-    No escanea puertos ni hace detección de SO, solo descubre IPs activas."""
+    No escanea puertos ni hace detección de SO, solo descubre IPs activas.
+    segmentos_extra: lista de rangos CIDR adicionales (ej: bridges transparentes)."""
     segmentos = (
         session.query(Dispositivo.segmento)
         .filter_by(cliente_id=cid)
@@ -1216,6 +1217,11 @@ def descubrir_nuevos(session, cid: int) -> dict:
         .all()
     )
     segmentos = sorted(set(r[0] for r in segmentos if r[0]))
+    if segmentos_extra:
+        for s in segmentos_extra:
+            if s not in segmentos:
+                segmentos.append(s)
+                logger.info(f"Segmento extra agregado al escaneo: {s}")
     if not segmentos:
         subred_local = _detectar_subred_local()
         if subred_local:

@@ -17,12 +17,13 @@ import speedtest as st_lib
 import uuid
 
 from backend.database import init_db, get_session, get_or_create_cliente
-from backend.models import Cliente, Dispositivo, Ping, Alerta, Servicio, PosicionTopologia, Credencial, MacVendorExact
+from backend.models import Cliente, Dispositivo, Ping, Alerta, Servicio, PosicionTopologia, Credencial, MacVendorExact, SegmentoExtra
 from backend.schemas import (
     DispositivoCreate, DispositivoOut, DispositivoConEstado,
     PingOut, ServicioOut, AlertaOut,
     ScanRequest, PosicionUpdate, StatsOut, CredencialCreate, CredencialOut,
     ChatRequest, NotificacionRequest,
+    SegmentoExtraCreate, SegmentoExtraOut,
 )
 from concurrent.futures import ThreadPoolExecutor
 import agente.nmap_scanner as nmap_scanner
@@ -59,7 +60,8 @@ async def lifespan(app: FastAPI):
                     disp_count = session.query(Dispositivo).filter_by(cliente_id=cli.id).count()
                     if disp_count > 0:
                         try:
-                            res = descubrir_nuevos(session, cli.id)
+                            segmentos_extra = [s.rango for s in session.query(SegmentoExtra).filter_by(cliente_id=cli.id).all()]
+                            res = descubrir_nuevos(session, cli.id, segmentos_extra=segmentos_extra)
                             if res.get("nuevos", 0) > 0:
                                 logger.info(f"Auto-descubrimiento para '{cli.nombre}': {res['nuevos']} nuevo(s)")
                         except Exception as e:
@@ -675,7 +677,8 @@ async def discover_nuevos(nombre_cliente: str = "red_cliente", todas: int = Quer
             resultados_totales = {"nuevos": 0, "total": 0, "hosts": [], "por_cliente": {}}
             for cli in clientes:
                 try:
-                    res = descubrir_nuevos(session, cli.id)
+                    segmentos_extra = [s.rango for s in session.query(SegmentoExtra).filter_by(cliente_id=cli.id).all()]
+                    res = descubrir_nuevos(session, cli.id, segmentos_extra=segmentos_extra)
                     resultados_totales["nuevos"] += res.get("nuevos", 0)
                     resultados_totales["total"] += res.get("total", 0)
                     resultados_totales["hosts"].extend(res.get("hosts", []))
@@ -684,7 +687,8 @@ async def discover_nuevos(nombre_cliente: str = "red_cliente", todas: int = Quer
                     logger.warning(f"Descubrimiento falló para '{cli.nombre}': {e}")
             return resultados_totales
         cid = get_or_create_cliente(session, nombre_cliente)
-        resultado = descubrir_nuevos(session, cid)
+        segmentos_extra = [s.rango for s in session.query(SegmentoExtra).filter_by(cliente_id=cid).all()]
+        resultado = descubrir_nuevos(session, cid, segmentos_extra=segmentos_extra)
         return resultado
     except Exception as e:
         raise HTTPException(500, f"Error en descubrimiento: {str(e)}")
@@ -994,7 +998,46 @@ async def listar_clientes():
             .order_by(func.count(Dispositivo.id).desc())
             .all()
         )
-        return {"clientes": [c.nombre for c in clientes]}
+        return {"clientes": [{"id": c.id, "nombre": c.nombre} for c in clientes]}
+    finally:
+        session.close()
+
+
+@app.get("/api/clientes/{cliente_id}/segmentos")
+async def listar_segmentos_extra(cliente_id: int):
+    session = get_session()
+    try:
+        segmentos = session.query(SegmentoExtra).filter_by(cliente_id=cliente_id).all()
+        return {"segmentos": [SegmentoExtraOut.model_validate(s).model_dump() for s in segmentos]}
+    finally:
+        session.close()
+
+
+@app.post("/api/clientes/{cliente_id}/segmentos")
+async def agregar_segmento_extra(cliente_id: int, data: SegmentoExtraCreate):
+    session = get_session()
+    try:
+        cliente = session.query(Cliente).filter_by(id=cliente_id).first()
+        if not cliente:
+            raise HTTPException(404, "Cliente no encontrado")
+        seg = SegmentoExtra(cliente_id=cliente_id, rango=data.rango, descripcion=data.descripcion)
+        session.add(seg)
+        session.commit()
+        return SegmentoExtraOut.model_validate(seg).model_dump()
+    finally:
+        session.close()
+
+
+@app.delete("/api/clientes/{cliente_id}/segmentos/{segmento_id}")
+async def eliminar_segmento_extra(cliente_id: int, segmento_id: int):
+    session = get_session()
+    try:
+        seg = session.query(SegmentoExtra).filter_by(id=segmento_id, cliente_id=cliente_id).first()
+        if not seg:
+            raise HTTPException(404, "Segmento no encontrado")
+        session.delete(seg)
+        session.commit()
+        return {"ok": True}
     finally:
         session.close()
 

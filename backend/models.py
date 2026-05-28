@@ -146,6 +146,17 @@ class MacVendorExact(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
+class SegmentoExtra(Base):
+    __tablename__ = "segmentos_extra"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    cliente_id = Column(Integer, ForeignKey("clientes.id", ondelete="CASCADE"), nullable=False)
+    rango = Column(String(45), nullable=False)
+    descripcion = Column(Text)
+
+    cliente_rel = relationship("Cliente")
+
+
 class PortHeuristic(Base):
     __tablename__ = "port_heuristic"
     __table_args__ = (

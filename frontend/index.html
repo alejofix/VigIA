@@ -481,14 +481,17 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
         <div class="controles">
           <button class="btn" onclick="mostrarModalScan()">+ Scan</button>
           <button class="btn btn-primary" id="btnPoll" onclick="togglePoll()">▶ Monitor</button>
-          <select id="pollIntervalo" style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:4px;font-family:var(--font);font-size:10px;">
+          <select id="pollIntervalo" style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:4px;font-family:var(--font);font-size:10px;" onchange="cargarDatos()">
             <option value="10">10s</option>
             <option value="20">20s</option>
             <option value="30" selected>30s</option>
           </select>
-          <button class="btn" onclick="buscarNuevos()">🔍 Buscar nuevos</button>
-          <button class="btn" onclick="buscarNuevosTodas()">🔍🌐 Todas las redes</button>
           <button class="btn" onclick="cargarDatos()">↻ Reload</button>
+          <select id="selectBusqueda" style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:4px;font-family:var(--font);font-size:10px;" onchange="if(this.value=='nuevos') buscarNuevos(); else if(this.value=='todas') buscarNuevosTodas(); this.value=''">
+            <option value="">🔍 Descubrir</option>
+            <option value="nuevos">Buscar nuevos</option>
+            <option value="todas">Todas las redes</option>
+          </select>
           <select id="selectReporte" style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:4px;font-family:var(--font);font-size:10px;" onchange="if(this.value) generarReporte(this.value); this.value=''">
             <option value="">📄 Reportes</option>
             <option value="html">HTML</option>
@@ -496,6 +499,7 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
           </select>
           <button class="btn" onclick="reconciliarRed()">♻ Reconciliar</button>
           <button class="btn" onclick="agregarVendor()">➕ Vendor</button>
+          <button class="btn" onclick="mostrarModalAgregarEquipo()">➕ Equipo</button>
           <button class="btn" onclick="mostrarModalCleanPings()">🧹 Limpiar</button>
           <button class="btn" onclick="borrarRed()" style="color:var(--down);border-color:rgba(232,72,72,0.2);">✖ Borrar Red</button>
           <span class="contador" id="contador">—</span>
@@ -701,6 +705,44 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
     </div>
   </div>
 
+  <div class="modal-overlay" id="modalAgregarEquipo">
+    <div class="modal" style="width:460px;">
+      <h3>➕ Agregar equipo manual</h3>
+      <p style="font-size:10px;color:var(--muted);margin-bottom:12px;">Para bridges transparentes o equipos que nmap no detecta automáticamente.</p>
+      <label style="font-size:11px;color:var(--muted);">IP</label>
+      <input id="inputEqIP" placeholder="192.168.1.200" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;margin-bottom:8px;">
+      <label style="font-size:11px;color:var(--muted);">Alias</label>
+      <input id="inputEqAlias" placeholder="Switch principal" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;margin-bottom:8px;">
+      <label style="font-size:11px;color:var(--muted);">MAC (opcional)</label>
+      <input id="inputEqMAC" placeholder="00:1B:44:11:3A:B7" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;margin-bottom:8px;">
+      <div style="display:flex;gap:8px;margin-bottom:8px;">
+        <div style="flex:1;">
+          <label style="font-size:11px;color:var(--muted);">Hostname</label>
+          <input id="inputEqHostname" placeholder="bridge-oficina" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
+        </div>
+        <div style="flex:1;">
+          <label style="font-size:11px;color:var(--muted);">Fabricante</label>
+          <input id="inputEqFab" placeholder="MikroTik" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
+        </div>
+      </div>
+      <label style="font-size:11px;color:var(--muted);">Tipo</label>
+      <select id="inputEqTipo" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;margin-bottom:8px;">
+        <option value="router">Router</option>
+        <option value="servidor">Servidor</option>
+        <option value="computadora">Computadora</option>
+        <option value="camara">Cámara</option>
+        <option value="impresora">Impresora</option>
+        <option value="dispositivo">Dispositivo</option>
+      </select>
+      <label style="font-size:11px;color:var(--muted);">Descripción</label>
+      <textarea id="inputEqDesc" placeholder="Bridge transparente - Red WiFi invitados" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;resize:vertical;margin-bottom:12px;"></textarea>
+      <div class="modal-btns">
+        <button class="btn" onclick="cerrarModalAgregarEquipo()">Cancelar</button>
+        <button class="btn btn-primary" onclick="guardarEquipo()">Guardar</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="modalCleanPings">
     <div class="modal" style="width:400px;">
       <h3>🧹 Limpiar historial de pings</h3>
@@ -728,11 +770,24 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
   </div>
 
   <div class="modal-overlay" id="modalCliente">
-    <div class="modal">
-      <h3>Cambiar cliente</h3>
-      <select id="selectCliente" style="width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;margin-bottom:12px;"></select>
-      <div class="modal-btns">
-        <button class="btn" onclick="cerrarModalCliente()">Cancelar</button>
+    <div class="modal" style="width:520px;">
+      <h3>Configuración del cliente</h3>
+      <label style="font-size:11px;color:var(--muted);">Cliente activo</label>
+      <select id="selectCliente" style="width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;margin-bottom:8px;"></select>
+
+      <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:12px;">
+        <label style="font-size:11px;color:var(--teal);font-weight:500;display:block;margin-bottom:6px;">🌐 Segmentos adicionales para escaneo</label>
+        <p style="font-size:10px;color:var(--muted);margin-bottom:8px;">Redes detrás de bridges transparentes o segmentos que no se detectan automáticamente.</p>
+        <div id="segmentosList" style="margin-bottom:8px;"></div>
+        <div style="display:flex;gap:4px;">
+          <input id="inputSegRango" placeholder="10.10.10.0/24" style="flex:2;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:var(--radius);font-family:var(--font);font-size:11px;">
+          <input id="inputSegDesc" placeholder="Bridge oficina 2" style="flex:3;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 8px;border-radius:var(--radius);font-family:var(--font);font-size:11px;">
+          <button class="btn btn-primary" onclick="agregarSegmento()" style="font-size:10px;padding:4px 10px;">+</button>
+        </div>
+      </div>
+
+      <div class="modal-btns" style="margin-top:14px;">
+        <button class="btn" onclick="cerrarModalCliente()">Cerrar</button>
         <button class="btn btn-primary" onclick="cambiarCliente()">Cambiar</button>
       </div>
     </div>
@@ -1156,13 +1211,14 @@ async function sincronizarCliente() {
   try {
     const res = await apiFetch('/api/clientes', { sinCliente: true });
     const actual = clienteActivo();
-    if (res.clientes.length > 0) {
+    const nombres = res.clientes.map(function(c) { return c.nombre; });
+    if (nombres.length > 0) {
       if (!actual) {
-        document.getElementById('clienteBadge').dataset.cliente = res.clientes[0];
-        document.getElementById('clienteNombre').textContent = res.clientes[0];
-      } else if (!res.clientes.includes(actual)) {
-        document.getElementById('clienteBadge').dataset.cliente = res.clientes[0];
-        document.getElementById('clienteNombre').textContent = res.clientes[0];
+        document.getElementById('clienteBadge').dataset.cliente = nombres[0];
+        document.getElementById('clienteNombre').textContent = nombres[0];
+      } else if (nombres.indexOf(actual) === -1) {
+        document.getElementById('clienteBadge').dataset.cliente = nombres[0];
+        document.getElementById('clienteNombre').textContent = nombres[0];
       }
     }
   } catch (_) {}
@@ -1226,6 +1282,22 @@ function mostrarModalScan() {
   document.getElementById('modalScan').classList.add('active');
   document.getElementById('inputRango').value = '192.168.1.0/24';
   document.getElementById('inputCliente').value = clienteActivo();
+  cargarSegmentosScan();
+}
+
+async function cargarSegmentosScan() {
+  try {
+    const res = await apiFetch('/api/clientes', { sinCliente: true });
+    const actual = clienteActivo();
+    const c = res.clientes.find(function(x) { return x.nombre === actual; });
+    if (!c) return;
+    const segRes = await apiFetch('/api/clientes/' + c.id + '/segmentos', { sinCliente: true });
+    if (segRes.segmentos && segRes.segmentos.length > 0) {
+      const rangos = segRes.segmentos.map(function(s) { return s.rango; }).join(', ');
+      const input = document.getElementById('inputRango');
+      input.value = input.value + ', ' + rangos;
+    }
+  } catch (_) {}
 }
 
 function cerrarModalScan() {
@@ -1387,14 +1459,16 @@ async function mostrarModalCliente() {
     select.innerHTML = '';
     for (const c of res.clientes) {
       const opt = document.createElement('option');
-      opt.value = c;
-      opt.textContent = c;
-      if (c === actual) opt.selected = true;
+      opt.value = c.nombre;
+      opt.dataset.id = c.id;
+      opt.textContent = c.nombre;
+      if (c.nombre === actual) opt.selected = true;
       select.appendChild(opt);
     }
     if (res.clientes.length === 0) {
       select.innerHTML = '<option value="">Sin clientes</option>';
     }
+    cargarSegmentos();
   } catch (e) {
     select.innerHTML = '<option value="">Error cargando</option>';
   }
@@ -1403,6 +1477,8 @@ async function mostrarModalCliente() {
 function cerrarModalCliente() {
   document.getElementById('modalCliente').classList.remove('active');
 }
+
+document.getElementById('selectCliente').addEventListener('change', cargarSegmentos);
 
 async function cambiarCliente() {
   const select = document.getElementById('selectCliente');
@@ -1413,6 +1489,115 @@ async function cambiarCliente() {
   document.getElementById('clienteNombre').textContent = cliente;
   toast('Cliente cambiado a: ' + cliente);
   cargarDatos(true);
+}
+
+// ── Segmentos extra ──
+async function cargarSegmentos() {
+  const select = document.getElementById('selectCliente');
+  const opt = select.selectedOptions[0];
+  const cid = opt && opt.dataset.id ? parseInt(opt.dataset.id) : null;
+  const listEl = document.getElementById('segmentosList');
+  listEl.innerHTML = '';
+  if (!cid) { listEl.innerHTML = '<div style="color:var(--muted);font-size:10px;">Selecciona un cliente</div>'; return; }
+  try {
+    const res = await apiFetch('/api/clientes/' + cid + '/segmentos', { sinCliente: true });
+    if (!res.segmentos || res.segmentos.length === 0) {
+      listEl.innerHTML = '<div style="color:var(--muted);font-size:10px;padding:4px 0;">Sin segmentos adicionales</div>';
+      return;
+    }
+    res.segmentos.forEach(function(s) {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:4px 6px;background:var(--bg);border:1px solid var(--border);border-radius:3px;margin-bottom:4px;font-size:10px;';
+      row.innerHTML = '<span><strong style="color:var(--teal-lt);">' + s.rango + '</strong> <span style="color:var(--muted);">' + (s.descripcion || '') + '</span></span>' +
+        '<button class="btn btn-sm" onclick="eliminarSegmento(' + cid + ',' + s.id + ')" style="color:var(--down);padding:1px 6px;">✕</button>';
+      listEl.appendChild(row);
+    });
+  } catch (e) {
+    listEl.innerHTML = '<div style="color:var(--down);font-size:10px;">Error cargando</div>';
+  }
+}
+
+async function agregarSegmento() {
+  const select = document.getElementById('selectCliente');
+  const opt = select.selectedOptions[0];
+  const cid = opt && opt.dataset.id ? parseInt(opt.dataset.id) : null;
+  if (!cid) { toast('Selecciona un cliente primero'); return; }
+  const rango = document.getElementById('inputSegRango').value.trim();
+  const desc = document.getElementById('inputSegDesc').value.trim();
+  if (!rango) { toast('Ingresa un rango CIDR'); return; }
+  try {
+    await apiFetch('/api/clientes/' + cid + '/segmentos', {
+      sinCliente: true,
+      method: 'POST',
+      body: JSON.stringify({ rango: rango, descripcion: desc }),
+    });
+    document.getElementById('inputSegRango').value = '';
+    document.getElementById('inputSegDesc').value = '';
+    toast('✅ Segmento agregado');
+    cargarSegmentos();
+  } catch (e) {
+    toast('Error: ' + e.message);
+  }
+}
+
+async function eliminarSegmento(cid, sid) {
+  if (!confirm('Eliminar este segmento?')) return;
+  try {
+    await apiFetch('/api/clientes/' + cid + '/segmentos/' + sid, { sinCliente: true, method: 'DELETE' });
+    cargarSegmentos();
+  } catch (e) {
+    toast('Error: ' + e.message);
+  }
+}
+
+// ── Agregar equipo manual ──
+function mostrarModalAgregarEquipo() {
+  document.getElementById('modalAgregarEquipo').classList.add('active');
+}
+
+function cerrarModalAgregarEquipo() {
+  document.getElementById('modalAgregarEquipo').classList.remove('active');
+}
+
+function guardarEquipo() {
+  const ip = document.getElementById('inputEqIP').value.trim();
+  if (!ip) { toast('Ingresa una IP'); return; }
+  mostrarModalAdminKey('agregar_equipo');
+}
+
+async function ejecutarAgregarEquipo(clave) {
+  const ip = document.getElementById('inputEqIP').value.trim();
+  const data = {
+    ip: ip,
+    hostname: document.getElementById('inputEqHostname').value.trim() || null,
+    mac: document.getElementById('inputEqMAC').value.trim() || null,
+    fabricante: document.getElementById('inputEqFab').value.trim() || null,
+    tipo: document.getElementById('inputEqTipo').value,
+    descripcion: document.getElementById('inputEqDesc').value.trim() || null,
+    tipo_asignacion_ip: 'estatica',
+  };
+  try {
+    const res = await apiFetch('/api/dispositivos', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    const alias = document.getElementById('inputEqAlias').value.trim();
+    if (alias && res.id) {
+      await apiFetch('/api/dispositivos/' + res.id + '/credenciales', {
+        method: 'POST',
+        body: JSON.stringify({
+          dispositivo_id: res.id,
+          alias: alias,
+          admin_pass: '', usuario: '', app_pass: '', observacion: '', serial: '',
+        }),
+      });
+    }
+    toast('✅ Equipo agregado');
+    cerrarModalAgregarEquipo();
+    cargarDatos();
+  } catch (e) {
+    toast('Error: ' + e.message);
+  }
 }
 
 function togglePoll() {
@@ -1743,6 +1928,7 @@ async function confirmarAdminKey() {
   else if (accion === 'borrar') await ejecutarBorrado(clave);
   else if (accion === 'borrar_dispositivo') await ejecutarBorradoDispositivo(clave, params);
   else if (accion === 'ver_credenciales') await ejecutarVerCredenciales(clave, params);
+  else if (accion === 'agregar_equipo') await ejecutarAgregarEquipo(clave);
 }
 
 async function ejecutarBorradoDispositivo(clave, params) {
