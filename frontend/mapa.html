@@ -159,6 +159,7 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
   .legend-title { color: var(--muted); font-size: 8px; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
   .legend-item { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; color: var(--text); }
   .legend-shape { display: inline-block; width: 10px; height: 10px; border-radius: 2px; text-align: center; line-height: 10px; font-size: 7px; }
+  .legend-dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; vertical-align: middle; flex-shrink: 0; }
 
   /* ── Side panel ── */
   .panel-lateral {
@@ -252,13 +253,13 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
     <!-- Legend -->
     <div class="legend" id="leyenda">
       <div class="legend-title">▸ TIPOS</div>
-      <div class="legend-item"><span class="legend-shape" style="background:#00c8d4;">⬡</span> Router</div>
-      <div class="legend-item"><span class="legend-shape" style="background:#4ad8e6;">⊞</span> Servidor</div>
-      <div class="legend-item"><span class="legend-shape" style="background:#d0d4e0;">★</span> Computadora</div>
-      <div class="legend-item"><span class="legend-shape" style="background:#22C55E;">◇</span> Cámara</div>
-      <div class="legend-item"><span class="legend-shape" style="background:#cc8800;">△</span> Impresora</div>
-      <div class="legend-item"><span class="legend-shape" style="background:#707888;">●</span> Dispositivo</div>
-      <div class="legend-item"><span class="legend-shape" style="background:#404050;">○</span> Desconocido</div>
+      <div class="legend-item" id="legRouter"><span class="legend-dot" style="background:#00c8d4;"></span> Router</div>
+      <div class="legend-item" id="legServidor"><span class="legend-dot" style="background:#38bdf8;"></span> Servidor</div>
+      <div class="legend-item" id="legComputadora"><span class="legend-dot" style="background:#94a3b8;"></span> Computadora</div>
+      <div class="legend-item" id="legCamara"><span class="legend-dot" style="background:#22C55E;"></span> Cámara</div>
+      <div class="legend-item" id="legImpresora"><span class="legend-dot" style="background:#f59e0b;"></span> Impresora</div>
+      <div class="legend-item" id="legDispositivo"><span class="legend-dot" style="background:#6b7280;"></span> Dispositivo</div>
+      <div class="legend-item" id="legDesconocido"><span class="legend-dot" style="background:#4b5563;"></span> Desconocido</div>
       <div style="margin-top:6px;padding-top:4px;border-top:1px solid var(--border);">
         <div class="legend-title">▸ ESTADOS</div>
         <div class="legend-item"><span style="width:10px;height:10px;border-radius:50%;display:inline-block;background:#22C55E;"></span> UP</div>
@@ -427,13 +428,56 @@ document.querySelectorAll('.filter-bar input[type="checkbox"]').forEach(function
 // ── Shape / color mapping ──
 var TIPO_CONFIG = {
   router:      { shape: 'hexagon', color: '#00c8d4', label: 'Router' },
-  servidor:    { shape: 'square',  color: '#4ad8e6', label: 'Servidor' },
-  computadora: { shape: 'star',    color: '#d0d4e0', label: 'PC' },
+  servidor:    { shape: 'square',  color: '#38bdf8', label: 'Servidor' },
+  computadora: { shape: 'star',    color: '#94a3b8', label: 'PC' },
   camara:      { shape: 'diamond', color: '#22C55E', label: 'Cámara' },
-  impresora:   { shape: 'triangle',color: '#cc8800', label: 'Impresora' },
-  dispositivo: { shape: 'dot',     color: '#707888', label: 'Dispositivo' },
-  desconocido: { shape: 'dot',     color: '#404050', label: '?' },
+  impresora:   { shape: 'triangle',color: '#f59e0b', label: 'Impresora' },
+  dispositivo: { shape: 'dot',     color: '#6b7280', label: 'Dispositivo' },
+  desconocido: { shape: 'dot',     color: '#4b5563', label: '?' },
 };
+
+// ── SVG icon paths (40×40 viewBox, white strokes on colored bg) ──
+var SVG_PATH = {
+  router:
+    '<rect x="11" y="23" width="18" height="11" rx="2" fill="none" stroke="#fff" stroke-width="1.5"/>' +
+    '<path d="M14 23v-4l3 1.5M20 23v-6l3 1.5M26 23v-4l3 1.5" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>',
+  servidor:
+    '<rect x="10" y="10" width="20" height="6" rx="1" fill="#fff" opacity=".85"/>' +
+    '<rect x="10" y="17" width="20" height="6" rx="1" fill="#fff" opacity=".65"/>' +
+    '<rect x="10" y="24" width="20" height="6" rx="1" fill="#fff" opacity=".45"/>' +
+    '<circle cx="14" cy="13" r="1" fill="#fff" opacity=".25"/><circle cx="14" cy="20" r="1" fill="#fff" opacity=".25"/><circle cx="14" cy="27" r="1" fill="#fff" opacity=".25"/>',
+  computadora:
+    '<rect x="9" y="12" width="22" height="14" rx="2" fill="none" stroke="#fff" stroke-width="1.5"/>' +
+    '<rect x="9" y="12" width="22" height="10" rx="1" fill="#fff" opacity=".08"/>' +
+    '<path d="M15 26v4h10v-4" fill="none" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>',
+  camara:
+    '<rect x="8" y="15" width="24" height="14" rx="3" fill="none" stroke="#fff" stroke-width="1.5"/>' +
+    '<circle cx="20" cy="22" r="4.5" fill="none" stroke="#fff" stroke-width="1.5"/>' +
+    '<circle cx="20" cy="22" r="1.5" fill="#fff" opacity=".3"/>' +
+    '<rect x="15" y="12" width="10" height="3" rx="1" fill="#fff" opacity=".6"/>',
+  impresora:
+    '<rect x="10" y="18" width="20" height="11" rx="2" fill="none" stroke="#fff" stroke-width="1.5"/>' +
+    '<rect x="13" y="29" width="14" height="3" rx="1" fill="none" stroke="#fff" stroke-width="1.2"/>' +
+    '<path d="M13 18v-4h14v4" fill="none" stroke="#fff" stroke-width="1.2"/>' +
+    '<rect x="12" y="20" width="16" height="4" rx=".5" fill="#fff" opacity=".08"/>',
+  dispositivo:
+    '<rect x="13" y="13" width="14" height="14" rx="3" fill="none" stroke="#fff" stroke-width="1.5"/>' +
+    '<circle cx="20" cy="20" r="2" fill="#fff" opacity=".35"/>',
+  desconocido:
+    '<text x="20" y="26" text-anchor="middle" font-family="sans-serif" font-size="20" font-weight="bold" fill="#fff">?</text>',
+};
+
+function generarImagenSVG(tipo, estado) {
+  var cfg = TIPO_CONFIG[tipo] || TIPO_CONFIG.desconocido;
+  var borde = borderFromEstado(estado);
+  var icono = SVG_PATH[tipo] || SVG_PATH.desconocido;
+  var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">' +
+    '<circle cx="20" cy="20" r="18" fill="' + cfg.color + '" stroke="' + borde + '" stroke-width="2.5"/>' +
+    '<circle cx="20" cy="20" r="16.5" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width=".5"/>' +
+    icono +
+    '</svg>';
+  return 'data:image/svg+xml,' + encodeURIComponent(svg);
+}
 
 var ESTADO_BORDE = {
   up:         '#22C55E',
@@ -525,24 +569,20 @@ async function cargarTopologia(autoPoll) {
     nodosData.forEach(function(n) {
       var tipo = n.tipo || 'desconocido';
       var estado = n.estado || 'desconocido';
-      var cfg = TIPO_CONFIG[tipo] || TIPO_CONFIG.desconocido;
-      var borderColor = borderFromEstado(estado);
-      var baseColor = colorFromTipo(tipo);
       var labelHTML = n.hostname || n.ip;
       if (n.alias) labelHTML = n.alias + '\n' + (n.hostname || n.ip);
 
       visNodes.add({
         id: n.id,
         label: labelHTML,
-        shape: shapeFromTipo(tipo),
-        color: {
-          background: baseColor,
-          border: borderColor,
-          highlight: { background: baseColor, border: borderColor },
-        },
-        borderWidth: 3,
-        borderWidthSelected: 4,
+        shape: 'image',
+        image: generarImagenSVG(tipo, estado),
         size: sizeFromTipo(tipo),
+        borderWidth: 0,
+        borderWidthSelected: 3,
+        shadow: {
+          enabled: true, size: 6, x: 0, y: 2, color: 'rgba(0,0,0,0.5)',
+        },
         font: {
           color: '#d0d4e0', size: 9, face: 'JetBrains Mono',
           strokeWidth: 2, strokeColor: '#0a0a0f',
@@ -559,8 +599,10 @@ async function cargarTopologia(autoPoll) {
         from: e.from,
         to: e.to,
         color: { color: '#18182a', hover: '#00c8d4' },
-        width: 1,
+        width: 1.5,
         smooth: { type: 'continuous' },
+        shadow: { enabled: true, size: 3, color: 'rgba(0,0,0,0.25)' },
+        hoverWidth: 2,
       });
     });
 
@@ -577,11 +619,14 @@ async function cargarTopologia(autoPoll) {
       manipulation: { enabled: false },
       nodes: {
         font: { face: 'JetBrains Mono' },
+        shadow: { enabled: true, size: 6, x: 0, y: 2, color: 'rgba(0,0,0,0.5)' },
       },
       edges: {
         color: { color: '#18182a', hover: '#00c8d4' },
-        width: 1,
+        width: 1.5,
         smooth: { type: 'continuous' },
+        shadow: { enabled: true, size: 3, color: 'rgba(0,0,0,0.25)' },
+        hoverWidth: 2,
       },
       background: 'transparent',
     };
@@ -658,23 +703,19 @@ function aplicarFiltros() {
     if (visibleIds.indexOf(n.id) === -1) return;
     var tipo = n.tipo || 'desconocido';
     var estado = n.estado || 'desconocido';
-    var cfg = TIPO_CONFIG[tipo] || TIPO_CONFIG.desconocido;
-    var borderColor = borderFromEstado(estado);
-    var baseColor = colorFromTipo(tipo);
     var labelHTML = n.hostname || n.ip;
     if (n.alias) labelHTML = n.alias + '\n' + (n.hostname || n.ip);
     filteredNodes.add({
       id: n.id,
       label: labelHTML,
-      shape: shapeFromTipo(tipo),
-      color: {
-        background: baseColor,
-        border: borderColor,
-        highlight: { background: baseColor, border: borderColor },
-      },
-      borderWidth: 3,
-      borderWidthSelected: 4,
+      shape: 'image',
+      image: generarImagenSVG(tipo, estado),
       size: sizeFromTipo(tipo),
+      borderWidth: 0,
+      borderWidthSelected: 3,
+      shadow: {
+        enabled: true, size: 6, x: 0, y: 2, color: 'rgba(0,0,0,0.5)',
+      },
       font: {
         color: '#d0d4e0', size: 9, face: 'JetBrains Mono',
         strokeWidth: 2, strokeColor: '#0a0a0f',
@@ -692,8 +733,10 @@ function aplicarFiltros() {
       from: e.from,
       to: e.to,
       color: { color: '#18182a', hover: '#00c8d4' },
-      width: 1,
+      width: 1.5,
       smooth: { type: 'continuous' },
+      shadow: { enabled: true, size: 3, color: 'rgba(0,0,0,0.25)' },
+      hoverWidth: 2,
     });
   });
 
@@ -718,12 +761,11 @@ async function mostrarPanel(nodeId) {
 
   document.getElementById('panelLateral').classList.add('abierto');
   var tipo = nodo.tipo || 'desconocido';
-  var cfg = TIPO_CONFIG[tipo] || TIPO_CONFIG.desconocido;
   var estado = nodo.estado || 'desconocido';
-  var borderColor = borderFromEstado(estado);
+  var cfg = TIPO_CONFIG[tipo] || TIPO_CONFIG.desconocido;
 
   document.getElementById('panelNombre').textContent = nodo.alias || nodo.hostname || nodo.ip;
-  document.getElementById('panelIcono').innerHTML = '<span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:' + cfg.color + ';border:2px solid ' + borderColor + ';margin-right:4px;vertical-align:middle;"></span>';
+  document.getElementById('panelIcono').innerHTML = '<img src="' + generarImagenSVG(tipo, estado) + '" style="width:18px;height:18px;vertical-align:middle;margin-right:4px;">';
 
   document.getElementById('pIP').textContent = nodo.ip;
   document.getElementById('pHostname').textContent = nodo.hostname || '—';
@@ -932,38 +974,26 @@ function speedtestM() {
 
 // ── Reconciliation / Reset ──
 function reconciliarRed() {
+  var _c = document.getElementById('clienteBadge').dataset.cliente;
+  if (!_c) {
+    alert('❌ No hay red activa. Seleccioná o creá una red primero.');
+    return;
+  }
   var clave = prompt('🔐 Ingresá la clave de admin para reconciliar:');
   if (!clave) return;
   apiFetch('/api/reconciliar', {
     method: 'POST',
     headers: { 'X-Admin-Key': clave },
   }).then(function(res) {
-    alert('Reconciliación completa: ' + res.corregidos_tipo + ' tipos, ' + res.corregidos_fab + ' fabricantes corregidos');
+    var ct = res.corregidos_tipo || 0;
+    var cf = res.corregidos_fab || 0;
+    alert('Reconciliación: ' + ct + ' tipos, ' + cf + ' fabricantes corregidos');
     cargarTopologia();
   }).catch(function(e) {
-    alert(e.message.includes('403') ? 'Clave incorrecta' : 'Error: ' + e.message);
+    alert('❌ ' + (e.message.includes('403') ? 'Clave incorrecta' : e.message));
   });
 }
 
-function borrarRedM() {
-  if (!confirm('¿BORRAR TODA LA RED? Se eliminarán todos los dispositivos. Esta acción NO se puede deshacer.')) return;
-  if (!confirm('¿Estás SEGURO? Última oportunidad.')) return;
-  var clave = prompt('🔐 Ingresá la clave de admin para borrar la red:');
-  if (!clave) return;
-  apiFetch('/api/red', {
-    method: 'DELETE',
-    headers: { 'X-Admin-Key': clave },
-  }).then(function(res) {
-    alert(res.mensaje);
-    document.getElementById('clienteBadge').dataset.cliente = '';
-    document.getElementById('clienteNombre').textContent = '—';
-    nodosData = [];
-    enlacesData = [];
-    if (network) network.setData({nodes:[], edges:[]});
-  }).catch(function(e) {
-    alert(e.message.includes('403') ? 'Clave incorrecta' : 'Error: ' + e.message);
-  });
-}
 </script>
 
 <div id="errorMsg"></div>
@@ -971,14 +1001,41 @@ function borrarRedM() {
 // ── Dash link ──
 var _dl = document.getElementById('dashLink');
 if (_dl) {
-  if (MODO_XAMPP) _dl.href = 'index.html';
-  else _dl.href = '/';
+  _dl.addEventListener('click', function(e) {
+    e.preventDefault();
+    if (window.opener && !window.opener.closed) {
+      window.opener.focus();
+      window.close();
+    } else {
+      window.location.href = MODO_XAMPP ? 'index.html' : '/';
+    }
+  });
 }
 
 // ── Init ──
 (function(){
   try {
     if (typeof vis === 'undefined') throw new Error('vis-network no cargó');
+
+    var params = new URLSearchParams(window.location.search);
+    var clienteURL = params.get('cliente');
+    if (clienteURL && clienteURL.trim()) {
+      document.getElementById('clienteBadge').dataset.cliente = clienteURL.trim();
+      document.getElementById('clienteNombre').textContent = clienteURL.trim();
+    }
+
+    var bc = new BroadcastChannel('vigia-cliente');
+    bc.onmessage = function(e) {
+      if (e.data.tipo === 'cliente-cambio') {
+        var act = document.getElementById('clienteBadge').dataset.cliente;
+        if (e.data.cliente !== act) {
+          document.getElementById('clienteBadge').dataset.cliente = e.data.cliente;
+          document.getElementById('clienteNombre').textContent = e.data.cliente || '—';
+          cargarTopologia(false);
+        }
+      }
+    };
+
     cargarTopologia(true);
   } catch(e) {
     var el = document.getElementById('errorMsg');

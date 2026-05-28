@@ -5,6 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VigIA — Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script>
+var MODO_XAMPP = true;
+var PUERTO_BACKEND = 8080;
+var API_BASE2 = MODO_XAMPP ? 'http://localhost:' + PUERTO_BACKEND : '';
+var _sb = MODO_XAMPP ? (location.protocol + '//' + location.host + '/VigIA/frontend') : (API_BASE2 + '/static');
+document.write('<script src="' + _sb + '/vendor/vis-network.min.js"><\/script>');
+document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesheet">');
+</script>
+
 <style>
   :root {
     --bg:        #0a0a0f;
@@ -240,6 +249,172 @@
   /* ── Footer ── */
   .footer { margin-top: 40px; padding: 16px 24px; border-top: 1px solid var(--border); text-align: center; font-size: 9px; color: rgba(112,120,136,0.4); letter-spacing: 0.1em; }
   .footer strong { color: rgba(112,120,136,0.6); font-weight: 500; }
+
+
+  
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 13px;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,200,212,0.004) 2px, rgba(0,200,212,0.004) 4px);
+    pointer-events: none;
+    z-index: 1;
+  }
+  .header {
+    background: rgba(15,15,24,0.92);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 52px;
+    position: relative;
+    z-index: 100;
+  }
+  .logo { font-size: 18px; font-weight: 600; color: var(--teal); letter-spacing: 3px; text-transform: uppercase; }
+  .logo span { font-weight: 300; color: var(--muted); letter-spacing: 1px; }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .btn {
+    background: transparent; border: 1px solid var(--border); color: var(--muted);
+    padding: 5px 12px; border-radius: var(--radius); font-family: var(--font);
+    font-size: 10px; cursor: pointer; transition: all 0.2s; letter-spacing: 0.02em;
+    text-decoration: none;
+  }
+  .btn:hover { border-color: rgba(0,200,212,0.25); color: var(--teal); background: rgba(0,200,212,0.03); }
+  .btn-primary { background: rgba(0,200,212,0.06); border-color: rgba(0,200,212,0.15); color: var(--teal); }
+  .btn-primary:hover { background: rgba(0,200,212,0.12); border-color: rgba(0,200,212,0.25); }
+  .badge {
+    background: rgba(0,200,212,0.06); border: 1px solid rgba(0,200,212,0.15);
+    color: var(--muted); font-size: 9px; padding: 2px 10px; border-radius: 12px;
+    letter-spacing: 0.05em;
+  }
+  .layout { display: flex; height: calc(100vh - 52px); position: relative; z-index: 2; overflow: hidden; }
+  #mapa-container { flex: 1; position: relative; }
+  #mapa { width: 100%; height: 100%; }
+
+  /* ── Terminal windows ── */
+  .term-window {
+    border: 1px solid var(--border); border-radius: var(--radius);
+    background: rgba(10,10,18,0.6); overflow: hidden;
+  }
+  .term-bar {
+    padding: 6px 12px; border-bottom: 1px solid rgba(24,24,42,0.3);
+    background: rgba(0,0,0,0.25); user-select: none;
+    display: flex; align-items: center; gap: 8px;
+    font-size: 10px; color: var(--muted); font-family: var(--font);
+  }
+  .prompt-user { color: var(--green); font-weight: 500; }
+  .prompt-at { color: var(--muted); }
+  .prompt-host { color: var(--teal); font-weight: 500; }
+  .prompt-path { color: var(--teal-lt); }
+  .prompt-sym { color: var(--green); font-weight: 700; }
+
+  .panel-activo { display: block; }
+  .panel-oculto { display: none; }
+
+  /* ── Top filter bar ── */
+  .filter-bar {
+    position: absolute; top: 12px; left: 12px; right: 12px;
+    z-index: 10; display: flex; gap: 8px; align-items: center;
+    flex-wrap: wrap;
+  }
+  .filter-group {
+    display: flex; gap: 4px; align-items: center;
+    background: rgba(10,10,18,0.85);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 4px 8px; font-size: 9px;
+  }
+  .filter-group label {
+    display: flex; align-items: center; gap: 3px;
+    cursor: pointer; color: var(--muted); font-size: 9px;
+    padding: 1px 4px; border-radius: 3px; transition: all 0.15s;
+  }
+  .filter-group label:hover { color: var(--text); background: var(--hover); }
+  .filter-group input[type="checkbox"] { accent-color: var(--teal); width: 10px; height: 10px; }
+  .filter-group input[type="text"] {
+    background: var(--bg); border: 1px solid var(--border);
+    color: var(--text); font-family: var(--font); font-size: 10px;
+    padding: 2px 6px; border-radius: 3px; width: 140px;
+    outline: none;
+  }
+  .filter-group input[type="text"]:focus { border-color: rgba(0,200,212,0.25); }
+  .filter-label { color: var(--muted); font-size: 8px; text-transform: uppercase; letter-spacing: 0.1em; margin-right: 2px; }
+
+  /* ── Bottom controls ── */
+  .map-controls {
+    position: absolute; bottom: 16px; left: 12px; z-index: 10;
+    display: flex; gap: 6px; align-items: center;
+  }
+
+  /* ── Legend ── */
+  .legend {
+    position: absolute; top: 80px; right: 12px; z-index: 10;
+    background: rgba(10,10,18,0.85);
+    border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 8px 10px; font-size: 9px;
+  }
+  .legend-title { color: var(--muted); font-size: 8px; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; color: var(--text); }
+  .legend-shape { display: inline-block; width: 10px; height: 10px; border-radius: 2px; text-align: center; line-height: 10px; font-size: 7px; }
+  .legend-dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; vertical-align: middle; flex-shrink: 0; }
+
+  /* ── Side panel ── */
+  .panel-lateral {
+    width: 0; overflow: hidden;
+    background: rgba(10,10,18,0.92);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-left: 1px solid var(--border);
+    transition: width 0.25s ease;
+    display: flex; flex-direction: column;
+  }
+  .panel-lateral.abierto { width: 340px; min-width: 340px; }
+  .panel-header {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+    background: rgba(0,0,0,0.2);
+  }
+  .panel-header h3 { font-size: 12px; color: var(--teal-lt); font-weight: 500; letter-spacing: 0.02em; }
+  .panel-close {
+    background: none; border: none; color: var(--muted); font-size: 14px;
+    cursor: pointer; padding: 2px 6px; border-radius: 3px;
+  }
+  .panel-close:hover { background: var(--hover); color: var(--text); }
+  .panel-body { flex: 1; overflow-y: auto; padding: 14px; font-size: 11px; }
+  .panel-field { margin-bottom: 10px; }
+  .panel-label { font-size: 8px; color: var(--teal); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 2px; }
+  .panel-value { color: var(--text); font-size: 11px; word-break: break-all; }
+  .panel-estado { display: inline-flex; align-items: center; gap: 5px; padding: 2px 6px; border-radius: 3px; font-size: 10px; }
+  .panel-estado.up { background: rgba(34,197,94,0.12); color: var(--up); border: 1px solid rgba(34,197,94,0.2); }
+  .panel-estado.warn { background: rgba(230,168,0,0.12); color: var(--warn); border: 1px solid rgba(230,168,0,0.2); }
+  .panel-estado.degradado { background: rgba(217,121,23,0.12); color: var(--degradado); border: 1px solid rgba(217,121,23,0.2); }
+  .panel-estado.down { background: rgba(232,72,72,0.12); color: var(--down); border: 1px solid rgba(232,72,72,0.2); }
+  .panel-estado.desconocido { background: rgba(112,120,136,0.08); color: var(--muted); border: 1px solid var(--border); }
+  .type-tag {
+    background: rgba(0,200,212,0.04); border: 1px solid rgba(0,200,212,0.08);
+    border-radius: 3px; padding: 1px 6px; font-size: 9px; color: var(--teal-lt);
+    display: inline-block;
+  }
+  .panel-barra-historial { display: flex; gap: 2px; flex-wrap: wrap; margin-top: 4px; }
+  .h-bar { width: 8px; height: 16px; border-radius: 1px; }
+  .panel-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+  .panel-actions .btn { font-size: 9px; padding: 3px 8px; }
+  .no-select { color: var(--muted); font-style: italic; padding: 20px; text-align: center; font-size: 11px; }
+  .count { color: var(--muted); font-size: 9px; }
+  #errorMsg { display:none; position:fixed; top:60px; left:50%; transform:translateX(-50%); z-index:999; background:#2a0f0f; border:1px solid #e84848; color:#e84848; padding:8px 16px; border-radius:6px; font-size:11px; max-width:80%; text-align:center; }
+
 </style>
 </head>
 <body>
@@ -247,7 +422,9 @@
   <header class="header">
     <div class="logo">Vig<span>IA</span><span style="font-size:9px;color:var(--muted);margin-left:8px;letter-spacing:1px;font-weight:300;">// NETWORK MONITOR</span></div>
     <div class="header-right">
-      <span class="badge" style="color:var(--green);border-color:rgba(0,204,119,0.15);">● SYS.ONLINE</span>
+      <button id="btnNavDashboard" class="btn btn-mapa" onclick="mostrarPanel('dashboard')" style="font-size:10px;padding:4px 12px;">📊 Dashboard</button>
+<button id="btnNavMapa" class="btn" onclick="mostrarPanel('mapa')" style="font-size:10px;padding:4px 12px;">🗺 Mapa</button>
+<span class="badge" style="color:var(--green);border-color:rgba(0,204,119,0.15);">● SYS.ONLINE</span>
       <span class="badge" id="clienteBadge" style="max-width:140px;overflow:hidden;text-overflow:ellipsis;" data-cliente="">● <span id="clienteNombre">—</span></span>
       <button class="btn" onclick="mostrarModalCliente()" style="font-size:9px;padding:2px 7px;">⌄ DB</button>
       <span class="badge" id="pollBadge">⏹ IDLE</span>
@@ -255,7 +432,8 @@
     </div>
   </header>
 
-  <div class="container">
+  <div id="panelDashboard" class="panel-activo">
+<div class="container">
     <div class="term-window">
       <div class="term-bar">
         <span><span class="prompt-user">alejo_fix</span><span class="prompt-at">@</span><span class="prompt-host">vigia</span><span class="prompt-at">:</span><span class="prompt-path">~/stats</span><span class="prompt-sym">$</span></span>
@@ -313,7 +491,6 @@
           <button class="btn" onclick="reconciliarRed()">♻ Reconciliar</button>
           <button class="btn" onclick="mostrarModalCleanPings()">🧹 Limpiar pings</button>
           <button class="btn" onclick="borrarRed()" style="color:var(--down);border-color:rgba(232,72,72,0.2);">✖ Borrar Red</button>
-          <a id="mapLink" href="#" class="btn btn-mapa">🗺 Mapa</a>
           <span class="contador" id="contador">—</span>
         </div>
 
@@ -365,8 +542,147 @@
       </div>
     </div>
   </div>
+</div>
 
-  <div class="modal-overlay" id="modalScan">
+<div id="panelMapa" class="panel-oculto">
+
+
+
+
+<div class="layout">
+  <div id="mapa-container">
+
+    <!-- Filter bar -->
+    <div class="filter-bar">
+      <div class="filter-group">
+        <span class="filter-label">TIPO</span>
+        <label><input type="checkbox" class="filter-tipo" value="router" checked> ▣ Router</label>
+        <label><input type="checkbox" class="filter-tipo" value="servidor" checked> ⊞ Serv</label>
+        <label><input type="checkbox" class="filter-tipo" value="computadora" checked> ★ PC</label>
+        <label><input type="checkbox" class="filter-tipo" value="camara" checked> ◇ Cam</label>
+        <label><input type="checkbox" class="filter-tipo" value="impresora" checked> △ Impr</label>
+        <label><input type="checkbox" class="filter-tipo" value="dispositivo" checked> ● Disp</label>
+        <label><input type="checkbox" class="filter-tipo" value="desconocido" checked> ○ ?</label>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">ESTADO</span>
+        <label><input type="checkbox" class="filter-estado" value="up" checked style="accent-color:#22C55E"> Up</label>
+        <label><input type="checkbox" class="filter-estado" value="warn" checked style="accent-color:#e6a800"> Warn</label>
+        <label><input type="checkbox" class="filter-estado" value="degradado" checked style="accent-color:#d97917"> Deg</label>
+        <label><input type="checkbox" class="filter-estado" value="down" checked style="accent-color:#e84848"> Down</label>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">BUSCAR</span>
+        <input type="text" id="filterSearch" placeholder="IP / hostname / alias..." oninput="aplicarFiltros()">
+      </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="legend" id="leyenda">
+      <div class="legend-title">▸ TIPOS</div>
+      <div class="legend-item" id="legRouter"><span class="legend-dot" style="background:#00c8d4;"></span> Router</div>
+      <div class="legend-item" id="legServidor"><span class="legend-dot" style="background:#38bdf8;"></span> Servidor</div>
+      <div class="legend-item" id="legComputadora"><span class="legend-dot" style="background:#94a3b8;"></span> Computadora</div>
+      <div class="legend-item" id="legCamara"><span class="legend-dot" style="background:#22C55E;"></span> Cámara</div>
+      <div class="legend-item" id="legImpresora"><span class="legend-dot" style="background:#f59e0b;"></span> Impresora</div>
+      <div class="legend-item" id="legDispositivo"><span class="legend-dot" style="background:#6b7280;"></span> Dispositivo</div>
+      <div class="legend-item" id="legDesconocido"><span class="legend-dot" style="background:#4b5563;"></span> Desconocido</div>
+      <div style="margin-top:6px;padding-top:4px;border-top:1px solid var(--border);">
+        <div class="legend-title">▸ ESTADOS</div>
+        <div class="legend-item"><span style="width:10px;height:10px;border-radius:50%;display:inline-block;background:#22C55E;"></span> UP</div>
+        <div class="legend-item"><span style="width:10px;height:10px;border-radius:50%;display:inline-block;background:#e6a800;"></span> Latencia alta</div>
+        <div class="legend-item"><span style="width:10px;height:10px;border-radius:50%;display:inline-block;background:#d97917;"></span> Degradado</div>
+        <div class="legend-item"><span style="width:10px;height:10px;border-radius:50%;display:inline-block;background:#e84848;"></span> DOWN</div>
+      </div>
+    </div>
+
+    <div id="mapa"></div>
+
+    <!-- Bottom controls -->
+    <div class="map-controls">
+      <div class="term-window" style="display:flex;align-items:center;gap:4px;padding:2px 6px;">
+        <button class="btn btn-primary" id="btnPollMapa" onclick="togglePollMapa()" style="font-size:9px;padding:2px 8px;">▶ Monitor</button>
+        <button class="btn" onclick="cargarTopologia()" style="font-size:9px;padding:2px 6px;">↻</button>
+        <button class="btn" onclick="reconciliarRed()" style="font-size:9px;padding:2px 6px;">♻ Sync</button>
+        <button class="btn" onclick="autoAcomodar()" style="font-size:9px;padding:2px 6px;">⊞ Lay</button>
+        <button class="btn" onclick="cambiarLayout()" style="font-size:9px;padding:2px 6px;">⟁ Switch</button>
+        <span class="count" id="contadorMapa" style="margin-left:4px;">—</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Side panel -->
+  <div class="panel-lateral" id="panelLateral">
+    <div class="panel-header">
+      <h3 id="panelTitulo"><span id="panelIcono"></span> <span id="panelNombre">Dispositivo</span></h3>
+      <button class="panel-close" onclick="cerrarPanel()">✕</button>
+    </div>
+    <div class="panel-body" id="panelBody">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div class="panel-field">
+          <div class="panel-label">IP</div>
+          <div class="panel-value" id="pIP" style="color:var(--teal);font-weight:500;">—</div>
+        </div>
+        <div class="panel-field">
+          <div class="panel-label">Estado</div>
+          <div class="panel-value" id="pEstado">—</div>
+        </div>
+        <div class="panel-field">
+          <div class="panel-label">Hostname</div>
+          <div class="panel-value" id="pHostname">—</div>
+        </div>
+        <div class="panel-field">
+          <div class="panel-label">Alias</div>
+          <div class="panel-value" id="pAlias">—</div>
+        </div>
+        <div class="panel-field">
+          <div class="panel-label">MAC</div>
+          <div class="panel-value" id="pMAC" style="font-family:monospace;font-size:10px;">—</div>
+        </div>
+        <div class="panel-field">
+          <div class="panel-label">Fabricante</div>
+          <div class="panel-value" id="pFabricante">—</div>
+        </div>
+        <div class="panel-field">
+          <div class="panel-label">Tipo</div>
+          <div class="panel-value" id="pTipo">—</div>
+        </div>
+        <div class="panel-field">
+          <div class="panel-label">Asignación IP</div>
+          <div class="panel-value" id="pAsignacion">—</div>
+        </div>
+        <div class="panel-field">
+          <div class="panel-label">Segmento</div>
+          <div class="panel-value" id="pSegmento">—</div>
+        </div>
+        <div class="panel-field">
+          <div class="panel-label">Latencia</div>
+          <div class="panel-value" id="pLatencia">—</div>
+        </div>
+        <div class="panel-field">
+          <div class="panel-label">Descripción</div>
+          <div class="panel-value" id="pDescripcion">—</div>
+        </div>
+        <div class="panel-field">
+          <div class="panel-label">Última vez</div>
+          <div class="panel-value" id="pUltimaVez">—</div>
+        </div>
+      </div>
+
+      <div style="margin-top:14px;">
+        <div class="panel-label" style="margin-bottom:4px;">Historial (últimos 24)</div>
+        <div class="panel-barra-historial" id="pHistorial"></div>
+      </div>
+
+      <div class="panel-actions" id="panelActions"></div>
+    </div>
+  </div>
+</div>
+
+
+</div>
+
+<div class="modal-overlay" id="modalScan">
     <div class="modal">
       <h3>Escaneo de red</h3>
       <input id="inputRango" placeholder="Rangos separados por coma (ej: 192.168.1.0/24, 192.168.2.0/24)">
@@ -529,6 +845,7 @@ async function apiFetch(url, opts = {}) {
     if (!c) {
       if (url.includes('/stats')) return {total_dispositivos:0,activos:0,warn:0,degradados:0,caidos:0,alertas_pendientes:0,total_pings:0};
       if (url.includes('/alertas')) return [];
+      if (url.includes('/topologia')) return {nodos:[], enlaces:[]};
       if (url.includes('/dispositivos') && !url.includes('/dispositivos/')) return [];
       if (url.includes('/reconciliar')) return {};
       if (url.includes('/poll')) return {};
@@ -745,7 +1062,7 @@ async function cargarDatos(autoPoll) {
     } catch (_) {
       toast('Error en verificación');
     }
-    cargarDatos();
+    await cargarDatos();
   }
 }
 
@@ -1360,86 +1677,563 @@ function borrarRed() {
   mostrarModalAdminKey('borrar');
 }
 
-// ── Canvas: electromagnetic waves ──
-(function() {
-  const canvas = document.getElementById('bgCanvas');
-  const ctx = canvas.getContext('2d');
-  let w, h, time = 0;
 
-  function resize() {
-    w = canvas.width = window.innerWidth;
-    h = canvas.height = window.innerHeight;
+
+// === PANEL NAVIGATION ===
+function mostrarPanel(panel) {
+  var dash = document.getElementById('panelDashboard');
+  var mapP = document.getElementById('panelMapa');
+  var bDash = document.getElementById('btnNavDashboard');
+  var bMap = document.getElementById('btnNavMapa');
+
+  if (dash) {
+    dash.classList.toggle('panel-oculto', panel !== 'dashboard');
+    dash.classList.toggle('panel-activo', panel === 'dashboard');
   }
-  window.addEventListener('resize', resize);
-  resize();
+  if (mapP) {
+    mapP.classList.toggle('panel-oculto', panel !== 'mapa');
+    mapP.classList.toggle('panel-activo', panel === 'mapa');
+  }
 
-  // Emitters for concentric waves
-  const emitters = [
-    { x: w * 0.2, y: h * 0.3, phase: 0 },
-    { x: w * 0.8, y: h * 0.6, phase: 2 },
-    { x: w * 0.5, y: h * 0.8, phase: 4 },
-  ];
-  window.addEventListener('resize', () => {
-    emitters[0].x = w * 0.2; emitters[0].y = h * 0.3;
-    emitters[1].x = w * 0.8; emitters[1].y = h * 0.6;
-    emitters[2].x = w * 0.5; emitters[2].y = h * 0.8;
+  if (bDash) bDash.className = panel === 'dashboard' ? 'btn btn-mapa' : 'btn';
+  if (bMap) bMap.className = panel === 'mapa' ? 'btn btn-mapa' : 'btn';
+
+  if (panel === 'mapa' && typeof cargarTopologia === 'function') {
+    setTimeout(function() { cargarTopologia(false); }, 100);
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// MAP FUNCTIONS
+// ═══════════════════════════════════════════════════════════════
+
+
+// === CONFIGURACIÓN ===
+// MODO_XAMPP = true:  frontend servido por Apache (XAMPP), backend Python en PUERTO_BACKEND
+// MODO_XAMPP = false: backend Python sirve todo (puerto 8080)
+
+
+// =====================
+
+
+
+
+
+
+
+
+
+
+var network = null, nodes = null, edges = null;
+var nodosData = [], enlacesData = [];
+// pollIntervalId, pollActivo, pollContador already declared with let above
+var layoutIndex = 0;
+var currentFilter = { tipos: {}, estados: {}, search: '' };
+
+document.querySelectorAll('.filter-bar input[type="checkbox"]').forEach(function(cb) {
+  cb.addEventListener('change', aplicarFiltros);
+});
+
+// gridCanvas omitted — no #gridCanvas element in this file
+
+// ── Shape / color mapping ──
+var TIPO_CONFIG = {
+  router:      { shape: 'hexagon', color: '#00c8d4', label: 'Router' },
+  servidor:    { shape: 'square',  color: '#38bdf8', label: 'Servidor' },
+  computadora: { shape: 'star',    color: '#94a3b8', label: 'PC' },
+  camara:      { shape: 'diamond', color: '#22C55E', label: 'Cámara' },
+  impresora:   { shape: 'triangle',color: '#f59e0b', label: 'Impresora' },
+  dispositivo: { shape: 'dot',     color: '#6b7280', label: 'Dispositivo' },
+  desconocido: { shape: 'dot',     color: '#4b5563', label: '?' },
+};
+
+// ── SVG icon paths (40×40 viewBox, white strokes on colored bg) ──
+var SVG_PATH = {
+  router:
+    '<rect x="11" y="23" width="18" height="11" rx="2" fill="none" stroke="#fff" stroke-width="1.5"/>' +
+    '<path d="M14 23v-4l3 1.5M20 23v-6l3 1.5M26 23v-4l3 1.5" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>',
+  servidor:
+    '<rect x="10" y="10" width="20" height="6" rx="1" fill="#fff" opacity=".85"/>' +
+    '<rect x="10" y="17" width="20" height="6" rx="1" fill="#fff" opacity=".65"/>' +
+    '<rect x="10" y="24" width="20" height="6" rx="1" fill="#fff" opacity=".45"/>' +
+    '<circle cx="14" cy="13" r="1" fill="#fff" opacity=".25"/><circle cx="14" cy="20" r="1" fill="#fff" opacity=".25"/><circle cx="14" cy="27" r="1" fill="#fff" opacity=".25"/>',
+  computadora:
+    '<rect x="9" y="12" width="22" height="14" rx="2" fill="none" stroke="#fff" stroke-width="1.5"/>' +
+    '<rect x="9" y="12" width="22" height="10" rx="1" fill="#fff" opacity=".08"/>' +
+    '<path d="M15 26v4h10v-4" fill="none" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>',
+  camara:
+    '<rect x="8" y="15" width="24" height="14" rx="3" fill="none" stroke="#fff" stroke-width="1.5"/>' +
+    '<circle cx="20" cy="22" r="4.5" fill="none" stroke="#fff" stroke-width="1.5"/>' +
+    '<circle cx="20" cy="22" r="1.5" fill="#fff" opacity=".3"/>' +
+    '<rect x="15" y="12" width="10" height="3" rx="1" fill="#fff" opacity=".6"/>',
+  impresora:
+    '<rect x="10" y="18" width="20" height="11" rx="2" fill="none" stroke="#fff" stroke-width="1.5"/>' +
+    '<rect x="13" y="29" width="14" height="3" rx="1" fill="none" stroke="#fff" stroke-width="1.2"/>' +
+    '<path d="M13 18v-4h14v4" fill="none" stroke="#fff" stroke-width="1.2"/>' +
+    '<rect x="12" y="20" width="16" height="4" rx=".5" fill="#fff" opacity=".08"/>',
+  dispositivo:
+    '<rect x="13" y="13" width="14" height="14" rx="3" fill="none" stroke="#fff" stroke-width="1.5"/>' +
+    '<circle cx="20" cy="20" r="2" fill="#fff" opacity=".35"/>',
+  desconocido:
+    '<text x="20" y="26" text-anchor="middle" font-family="sans-serif" font-size="20" font-weight="bold" fill="#fff">?</text>',
+};
+
+function generarImagenSVG(tipo, estado) {
+  var cfg = TIPO_CONFIG[tipo] || TIPO_CONFIG.desconocido;
+  var borde = borderFromEstado(estado);
+  var icono = SVG_PATH[tipo] || SVG_PATH.desconocido;
+  var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">' +
+    '<circle cx="20" cy="20" r="18" fill="' + cfg.color + '" stroke="' + borde + '" stroke-width="2.5"/>' +
+    '<circle cx="20" cy="20" r="16.5" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width=".5"/>' +
+    icono +
+    '</svg>';
+  return 'data:image/svg+xml,' + encodeURIComponent(svg);
+}
+
+var ESTADO_BORDE = {
+  up:         '#22C55E',
+  warn:       '#e6a800',
+  degradado:  '#d97917',
+  down:       '#e84848',
+};
+
+var ESTADO_LABEL = {
+  up: 'UP',
+  warn: 'Latencia alta',
+  degradado: 'Degradado',
+  down: 'DOWN',
+};
+
+
+
+function shapeFromTipo(tipo) {
+  var cfg = TIPO_CONFIG[tipo];
+  return cfg ? cfg.shape : 'dot';
+}
+
+function colorFromTipo(tipo) {
+  var cfg = TIPO_CONFIG[tipo];
+  return cfg ? cfg.color : '#404050';
+}
+
+function borderFromEstado(estado) {
+  return ESTADO_BORDE[estado] || '#404050';
+}
+
+function sizeFromTipo(tipo) {
+  switch (tipo) {
+    case 'router': return 40;
+    case 'servidor': return 32;
+    case 'computadora': return 26;
+    case 'camara': return 28;
+    case 'impresora': return 28;
+    default: return 22;
+  }
+}
+
+// ── Load topology ──
+async function cargarTopologia(autoPoll) {
+  await sincronizarCliente();
+  var c = document.getElementById('clienteBadge').dataset.cliente;
+  if (!c) {
+    nodosData = [];
+    enlacesData = [];
+    if (network) { network.setData({nodes:[], edges:[]}); }
+    return;
+  }
+  try {
+    var data = await apiFetch('/api/topologia');
+    nodosData = data.nodos || [];
+    enlacesData = data.enlaces || [];
+
+    var visNodes = new vis.DataSet();
+    nodosData.forEach(function(n) {
+      var tipo = n.tipo || 'desconocido';
+      var estado = n.estado || 'desconocido';
+      var labelHTML = n.hostname || n.ip;
+      if (n.alias) labelHTML = n.alias + '\n' + (n.hostname || n.ip);
+
+      visNodes.add({
+        id: n.id,
+        label: labelHTML,
+        shape: 'image',
+        image: generarImagenSVG(tipo, estado),
+        size: sizeFromTipo(tipo),
+        borderWidth: 0,
+        borderWidthSelected: 3,
+        shadow: {
+          enabled: true, size: 6, x: 0, y: 2, color: 'rgba(0,0,0,0.5)',
+        },
+        font: {
+          color: '#d0d4e0', size: 9, face: 'JetBrains Mono',
+          strokeWidth: 2, strokeColor: '#0a0a0f',
+          multi: 'md',
+        },
+        x: n.x || undefined,
+        y: n.y || undefined,
+      });
+    });
+
+    var visEdges = new vis.DataSet();
+    enlacesData.forEach(function(e) {
+      visEdges.add({
+        from: e.from,
+        to: e.to,
+        color: { color: '#18182a', hover: '#00c8d4' },
+        width: 1.5,
+        smooth: { type: 'continuous' },
+        shadow: { enabled: true, size: 3, color: 'rgba(0,0,0,0.25)' },
+        hoverWidth: 2,
+      });
+    });
+
+    var container = document.getElementById('mapa');
+    var options = {
+      physics: { enabled: false },
+      interaction: {
+        dragNodes: true,
+        dragView: true,
+        zoomView: true,
+        hover: true,
+        tooltipDelay: 200,
+      },
+      manipulation: { enabled: false },
+      nodes: {
+        font: { face: 'JetBrains Mono' },
+        shadow: { enabled: true, size: 6, x: 0, y: 2, color: 'rgba(0,0,0,0.5)' },
+      },
+      edges: {
+        color: { color: '#18182a', hover: '#00c8d4' },
+        width: 1.5,
+        smooth: { type: 'continuous' },
+        shadow: { enabled: true, size: 3, color: 'rgba(0,0,0,0.25)' },
+        hoverWidth: 2,
+      },
+      background: 'transparent',
+    };
+
+    if (network) {
+      network.setData({ nodes: visNodes, edges: visEdges });
+    } else {
+      network = new vis.Network(container, { nodes: visNodes, edges: visEdges }, options);
+
+      network.on('click', function(params) {
+        if (params.nodes.length > 0) {
+          mostrarDetalleDispositivo(params.nodes[0]);
+        } else {
+          cerrarPanel();
+        }
+      });
+
+      network.on('dragEnd', function(params) {
+        if (params.nodes.length > 0) guardarPosiciones();
+      });
+
+      network.on('hoverNode', function() {
+        document.getElementById('mapa').style.cursor = 'pointer';
+      });
+      network.on('blurNode', function() {
+        document.getElementById('mapa').style.cursor = 'default';
+      });
+    }
+
+    aplicarFiltros();
+    actualizarContadorMapa();
+    if (autoPoll && !pollActivo && c) {
+      try {
+        await apiFetch('/api/poll');
+      } catch (_) {}
+      cargarTopologia();
+    }
+  } catch (e) {
+    console.error('Error cargando topologia:', e);
+  }
+}
+
+// ── Filters ──
+function aplicarFiltros() {
+  if (!network) return;
+
+  currentFilter.search = (document.getElementById('filterSearch').value || '').toLowerCase();
+
+  var checkboxesTipo = document.querySelectorAll('.filter-tipo');
+  checkboxesTipo.forEach(function(cb) {
+    currentFilter.tipos[cb.value] = cb.checked;
   });
 
-  function draw() {
-    ctx.clearRect(0, 0, w, h);
-    time += 0.01;
+  var checkboxesEstado = document.querySelectorAll('.filter-estado');
+  checkboxesEstado.forEach(function(cb) {
+    currentFilter.estados[cb.value] = cb.checked;
+  });
 
-    // ── Oscilloscope sine waves ──
-    const waves = [
-      { amp: 40, freq: 0.008, speed: 0.6, yOff: 0.15, alpha: 0.08 },
-      { amp: 28, freq: 0.015, speed: 0.4, yOff: 0.35, alpha: 0.06 },
-      { amp: 50, freq: 0.005, speed: 0.5, yOff: 0.55, alpha: 0.05 },
-      { amp: 20, freq: 0.025, speed: 0.7, yOff: 0.75, alpha: 0.04 },
-      { amp: 35, freq: 0.01, speed: 0.35, yOff: 0.9, alpha: 0.06 },
-    ];
-    for (const wave of waves) {
-      ctx.beginPath();
-      ctx.strokeStyle = `rgba(0,200,212,${wave.alpha})`;
-      ctx.lineWidth = 1.2;
-      for (let x = 0; x < w; x += 2) {
-        const yBase = h * wave.yOff;
-        const y = yBase + Math.sin(x * wave.freq + time * wave.speed) * wave.amp
-                         + Math.sin(x * wave.freq * 2.3 + time * wave.speed * 1.7) * (wave.amp * 0.3);
-        x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-      }
-      ctx.stroke();
-      // glow
-      ctx.beginPath();
-      ctx.strokeStyle = `rgba(0,240,255,${wave.alpha * 0.2})`;
-      ctx.lineWidth = 4;
-      for (let x = 0; x < w; x += 2) {
-        const yBase = h * wave.yOff;
-        const y = yBase + Math.sin(x * wave.freq + time * wave.speed) * wave.amp
-                         + Math.sin(x * wave.freq * 2.3 + time * wave.speed * 1.7) * (wave.amp * 0.3);
-        x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-      }
-      ctx.stroke();
+  var visibleIds = [];
+  nodosData.forEach(function(n) {
+    var tipo = n.tipo || 'desconocido';
+    var estado = n.estado || 'desconocido';
+    if (!currentFilter.tipos[tipo]) return;
+    if (!currentFilter.estados[estado]) return;
+    if (currentFilter.search) {
+      var haystack = (n.ip + ' ' + (n.hostname || '') + ' ' + (n.alias || '')).toLowerCase();
+      if (haystack.indexOf(currentFilter.search) === -1) return;
     }
+    visibleIds.push(n.id);
+  });
 
-    // ── Concentric electromagnetic rings ──
-    for (const e of emitters) {
-      const rings = 6;
-      for (let r = 0; r < rings; r++) {
-        const radius = (time * 50 + r * 70 + e.phase * 30) % 400;
-        const alpha = 0.06 * (1 - radius / 400);
-        if (alpha < 0.02) continue;
-        ctx.beginPath();
-        ctx.arc(e.x, e.y, radius, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(0,200,212,${alpha})`;
-        ctx.lineWidth = 1;
-        ctx.stroke();
-      }
-    }
+  var filteredNodes = new vis.DataSet();
+  nodosData.forEach(function(n) {
+    if (visibleIds.indexOf(n.id) === -1) return;
+    var tipo = n.tipo || 'desconocido';
+    var estado = n.estado || 'desconocido';
+    var labelHTML = n.hostname || n.ip;
+    if (n.alias) labelHTML = n.alias + '\n' + (n.hostname || n.ip);
+    filteredNodes.add({
+      id: n.id,
+      label: labelHTML,
+      shape: 'image',
+      image: generarImagenSVG(tipo, estado),
+      size: sizeFromTipo(tipo),
+      borderWidth: 0,
+      borderWidthSelected: 3,
+      shadow: {
+        enabled: true, size: 6, x: 0, y: 2, color: 'rgba(0,0,0,0.5)',
+      },
+      font: {
+        color: '#d0d4e0', size: 9, face: 'JetBrains Mono',
+        strokeWidth: 2, strokeColor: '#0a0a0f',
+        multi: 'md',
+      },
+      x: n.x || undefined,
+      y: n.y || undefined,
+    });
+  });
 
-    requestAnimationFrame(draw);
+  var filteredEdges = new vis.DataSet();
+  enlacesData.forEach(function(e) {
+    if (visibleIds.indexOf(e.from) === -1 || visibleIds.indexOf(e.to) === -1) return;
+    filteredEdges.add({
+      from: e.from,
+      to: e.to,
+      color: { color: '#18182a', hover: '#00c8d4' },
+      width: 1.5,
+      smooth: { type: 'continuous' },
+      shadow: { enabled: true, size: 3, color: 'rgba(0,0,0,0.25)' },
+      hoverWidth: 2,
+    });
+  });
+
+  network.setData({ nodes: filteredNodes, edges: filteredEdges });
+  actualizarContadorMapa(visibleIds.length);
+}
+
+function actualizarContadorMapa(visible) {
+  var el = document.getElementById('contadorMapa');
+  var total = nodosData.length;
+  if (visible !== undefined) {
+    el.textContent = visible + '/' + total;
+  } else {
+    el.textContent = total + ' hosts';
   }
-  draw();
-})();
+}
+
+// ── Side panel ──
+async function mostrarDetalleDispositivo(nodeId) {
+  var nodo = nodosData.find(function(n) { return n.id === nodeId; });
+  if (!nodo) return;
+
+  document.getElementById('panelLateral').classList.add('abierto');
+  var tipo = nodo.tipo || 'desconocido';
+  var estado = nodo.estado || 'desconocido';
+  var cfg = TIPO_CONFIG[tipo] || TIPO_CONFIG.desconocido;
+
+  document.getElementById('panelNombre').textContent = nodo.alias || nodo.hostname || nodo.ip;
+  document.getElementById('panelIcono').innerHTML = '<img src="' + generarImagenSVG(tipo, estado) + '" style="width:18px;height:18px;vertical-align:middle;margin-right:4px;">';
+
+  document.getElementById('pIP').textContent = nodo.ip;
+  document.getElementById('pHostname').textContent = nodo.hostname || '—';
+  document.getElementById('pAlias').textContent = nodo.alias || '—';
+  document.getElementById('pMAC').textContent = nodo.mac || '—';
+  document.getElementById('pFabricante').textContent = nodo.fabricante || '—';
+  document.getElementById('pTipo').innerHTML = '<span class="type-tag">' + cfg.label + '</span>';
+  document.getElementById('pDescripcion').textContent = nodo.descripcion || '—';
+
+  var asig = nodo.tipo_asignacion_ip || 'desconocido';
+  var asigColores = { dhcp: '#3b82f6', reservada: '#22c55e', estatica: '#f97316', desconocido: '#9ca3af' };
+  document.getElementById('pAsignacion').innerHTML = '<span style="color:' + (asigColores[asig] || '#9ca3af') + ';">' + asig.toUpperCase() + '</span>';
+
+  document.getElementById('pSegmento').textContent = nodo.segmento || '—';
+  document.getElementById('pUltimaVez').textContent = nodo.ultima_vez ? new Date(nodo.ultima_vez).toLocaleString() : '—';
+
+  var estadoClase = estado;
+  var estadoTexto = ESTADO_LABEL[estado] || estado;
+  document.getElementById('pEstado').innerHTML = '<span class="panel-estado ' + estadoClase + '">● ' + estadoTexto + '</span>';
+  document.getElementById('pLatencia').textContent = nodo.latencia !== null ? nodo.latencia.toFixed(1) + 'ms' : '—';
+
+  var historialEl = document.getElementById('pHistorial');
+  historialEl.innerHTML = '';
+  try {
+    var pings = await apiFetch('/api/dispositivos/' + nodeId + '/pings?limite=24');
+    pings.reverse().forEach(function(p) {
+      var bar = document.createElement('div');
+      bar.className = 'h-bar';
+      if (p.estado === 'up') {
+        bar.style.background = p.latencia_ms && p.latencia_ms > 100 ? '#e6a800' : '#22C55E';
+      } else if (p.estado === 'degradado') {
+        bar.style.background = '#d97917';
+      } else {
+        bar.style.background = '#e84848';
+      }
+      bar.title = (p.estado || '') + ' ' + (p.latencia_ms ? p.latencia_ms.toFixed(0) + 'ms' : '') + ' ' + new Date(p.timestamp).toLocaleTimeString();
+      historialEl.appendChild(bar);
+    });
+  } catch (_) {}
+
+  var actionsEl = document.getElementById('panelActions');
+  actionsEl.innerHTML = '';
+  actionsEl.innerHTML += '<button class="btn" onclick="window.open(\'http://' + nodo.ip + '\',\'_blank\')">🌐 Web</button>';
+  actionsEl.innerHTML += '<button class="btn" onclick="copiarIP(\'' + nodo.ip + '\')">📋 IP</button>';
+  actionsEl.innerHTML += '<button class="btn" onclick="mostrarPing(' + nodeId + ')">🔍 Ping</button>';
+}
+
+function copiarIP(ip) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(ip).catch(function() {
+      fallbackCopiar(ip);
+    });
+  } else {
+    fallbackCopiar(ip);
+  }
+}
+
+function fallbackCopiar(texto) {
+  var ta = document.createElement('textarea');
+  ta.value = texto;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    document.execCommand('copy');
+  } catch (_) {}
+  document.body.removeChild(ta);
+}
+
+function mostrarPing(nodeId) {
+  var nodo = nodosData.find(function(n) { return n.id === nodeId; });
+  if (!nodo) return;
+
+  var statusEl = document.getElementById('pPingStatus');
+  if (!statusEl) {
+    statusEl = document.createElement('div');
+    statusEl.id = 'pPingStatus';
+    statusEl.style.cssText = 'margin-top:12px;padding:8px 10px;border:1px solid var(--border);border-radius:4px;font-size:10px;background:rgba(0,0,0,0.2);';
+    document.getElementById('panelBody').appendChild(statusEl);
+  }
+  statusEl.innerHTML = '⏳ Pinging <strong>' + nodo.ip + '</strong>...';
+
+  apiFetch('/api/poll').then(function() {
+    return apiFetch('/api/dispositivos/con-estado');
+  }).then(function(devices) {
+    var d = devices.find(function(x) { return x.id === nodeId; });
+    if (!d) { statusEl.innerHTML = '❌ Dispositivo no encontrado'; return; }
+    if (d.estado === 'up') {
+      if (d.latencia_ms && d.latencia_ms > 100) {
+        statusEl.innerHTML = '⚠️ Latencia alta: ' + d.latencia_ms.toFixed(0) + 'ms';
+      } else {
+        statusEl.innerHTML = '✅ OK — ' + (d.latencia_ms ? d.latencia_ms.toFixed(0) + 'ms' : '<1ms');
+      }
+    } else if (d.estado === 'degradado') {
+      statusEl.innerHTML = '⚠️ Degradado';
+    } else if (d.estado === 'warn') {
+      statusEl.innerHTML = '⚠️ Latencia alta: ' + (d.latencia_ms ? d.latencia_ms.toFixed(0) + 'ms' : '?');
+    } else {
+      statusEl.innerHTML = '🔴 SIN RESPUESTA — equipo caído';
+    }
+    cargarTopologia();
+  }).catch(function() {
+    statusEl.innerHTML = '❌ Error al consultar estado';
+  });
+}
+
+function cerrarPanel() {
+  document.getElementById('panelLateral').classList.remove('abierto');
+}
+
+async function guardarPosiciones() {
+  if (!network) return;
+  var positions = network.getPositions();
+  var posiciones = Object.entries(positions).map(function(e) {
+    return { dispositivo_id: parseInt(e[0]), x: e[1].x, y: e[1].y };
+  });
+  try {
+    await apiFetch('/api/topologia/posiciones', {
+      method: 'POST',
+      body: JSON.stringify(posiciones),
+    });
+  } catch (e) {
+    console.error('Error guardando posiciones:', e);
+  }
+}
+
+function autoAcomodar() {
+  if (!network) return;
+  network.setOptions({ physics: { enabled: true, solver: 'forceAtlas2Based', stabilization: { iterations: 200 } } });
+  network.once('stabilizationIterationsDone', function() {
+    network.setOptions({ physics: { enabled: false } });
+    guardarPosiciones();
+  });
+}
+
+function cambiarLayout() {
+  if (!network) return;
+  var layouts = [
+    { solver: 'forceAtlas2Based', repulsion: 400 },
+    { solver: 'repulsion', repulsion: 600 },
+    { solver: 'barnesHut', repulsion: 500 },
+    { solver: 'hierarchicalRepulsion', repulsion: 400 },
+  ];
+  layoutIndex = (layoutIndex + 1) % layouts.length;
+  var l = layouts[layoutIndex];
+  network.setOptions({ physics: { enabled: true, solver: l.solver, repulsion: { nodeDistance: l.repulsion }, stabilization: { iterations: 150 } } });
+  network.once('stabilizationIterationsDone', function() {
+    network.setOptions({ physics: { enabled: false } });
+    guardarPosiciones();
+  });
+}
+
+function togglePollMapa() {
+  var btn = document.getElementById('btnPollMapa');
+  if (pollActivo) {
+    clearInterval(pollIntervalId);
+    pollActivo = false;
+    btn.textContent = '▶ Monitor';
+    document.getElementById('pollBadge').textContent = '⏹ IDLE';
+    document.getElementById('contadorMapa').textContent = nodosData.length + ' hosts';
+  } else {
+    pollActivo = true;
+    btn.textContent = '⏸ Stop';
+    document.getElementById('pollBadge').textContent = '▶ activo';
+    pollContador = 0;
+    pollIntervalId = setInterval(function() {
+      cargarTopologia();
+      pollContador++;
+      document.getElementById('contadorMapa').textContent = '⏱ ' + (pollContador * 10) + 's';
+    }, 10000);
+    document.getElementById('contadorMapa').textContent = '⏱ 0s';
+  }
+}
+
+// ── Speedtest ──
+
+
+// ── Reconciliation / Reset ──
+
+
+
+
+
+
+
 
 cargarDatos(true);
 </script>
