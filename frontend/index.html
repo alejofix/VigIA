@@ -512,6 +512,18 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
             </tr></thead>
             <tbody id="tablaBody"></tbody>
           </table>
+          <div id="paginationControls" style="display:flex;align-items:center;justify-content:center;gap:12px;padding:10px 0;font-size:11px;color:var(--muted);border-top:1px solid var(--border);margin-top:4px;">
+            <button class="btn btn-sm" onclick="cambiarPagina('prev')" id="btnPrev" disabled>◀ Anterior</button>
+            <span id="pageInfo">Página 1 de 1</span>
+            <button class="btn btn-sm" onclick="cambiarPagina('next')" id="btnNext" disabled>Siguiente ▶</button>
+            <span style="margin-left:8px;">Mostrar</span>
+            <select id="selectPorPagina" style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:2px 4px;border-radius:4px;font-family:var(--font);font-size:11px;" onchange="cambiarPagina('reload')">
+              <option value="20">20</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+              <option value="0">Todas</option>
+            </select>
+          </div>
         </div>
       </div>
     </div>
@@ -845,6 +857,20 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
     </div>
   </div>
 
+  <div class="modal-overlay" id="modalComentarios">
+    <div class="modal" style="width:460px;">
+      <h3 id="comentariosTitle">💬 Comentarios</h3>
+      <div id="comentariosList" style="max-height:300px;overflow-y:auto;margin-bottom:12px;font-size:11px;"></div>
+      <div style="display:flex;gap:4px;">
+        <input id="inputComentario" placeholder="Agregar comentario..." style="flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
+        <button class="btn btn-primary" onclick="agregarComentario()" style="font-size:12px;padding:4px 12px;">➕</button>
+      </div>
+      <div class="modal-btns" style="margin-top:12px;">
+        <button class="btn" onclick="cerrarModalComentarios()">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
   <div class="footer">
     <span class="prompt-sym">$</span> <span class="prompt-user">alejo_fix</span> <span class="prompt-at">//</span> <strong style="color:rgba(0,204,119,0.5);font-weight:400;">MARDAN COLOMBIA</strong> <span class="prompt-at">//</span> VIGIA v0.1
   </div>
@@ -1039,84 +1065,116 @@ async function cargarStats() {
   } catch (e) { console.error('Stats error:', e); }
 }
 
+let _datosDispositivos = [];
+let _paginaActual = 1;
+let _porPagina = 20;
+
+function _renderizarPagina() {
+  const tbody = document.getElementById('tablaBody');
+  const total = _datosDispositivos.length;
+  const porPagina = _porPagina === 0 ? total : _porPagina;
+  const totalPaginas = porPagina > 0 ? Math.max(1, Math.ceil(total / porPagina)) : 1;
+  if (_paginaActual > totalPaginas) _paginaActual = totalPaginas;
+
+  const inicio = (_paginaActual - 1) * porPagina;
+  const fin = _porPagina === 0 ? total : Math.min(inicio + _porPagina, total);
+  const pagina = _datosDispositivos.slice(inicio, fin);
+
+  tbody.innerHTML = '';
+
+  const asigColor = {dhcp:'#3b82f6', reservada:'#22c55e', estatica:'#f97316', desconocido:'#9ca3af'};
+
+  for (const d of pagina) {
+    const estado = d.estado || 'desconocido';
+    const latencia = d.latencia_ms;
+    const ultima = d.ultima_vez ? new Date(d.ultima_vez).toLocaleString() : '—';
+
+    let dotClass = 'dot-unknown';
+    let estadoTexto = estado;
+    if (estado === 'up') { dotClass = 'dot-up'; estadoTexto = 'activo'; }
+    else if (estado === 'degradado') { dotClass = 'dot-degradado'; estadoTexto = 'degradado'; }
+    else if (estado === 'down') { dotClass = 'dot-down'; estadoTexto = 'caido'; }
+    else if (estado === 'warn') { dotClass = 'dot-warn'; estadoTexto = 'latencia alta'; }
+
+    const latStr = latencia !== null ? `${latencia.toFixed(0)}ms` : '—';
+    const asig = d.tipo_asignacion_ip || 'desconocido';
+    const ipColor = asigColor[asig] || '#9ca3af';
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="color:${ipColor};font-weight:600;">${d.ip}</td>
+      <td><select class="asig-select" data-id="${d.id}" style="font-size:11px;padding:2px 2px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);width:100%;min-width:80px;">
+        <option value="desconocido" ${asig==='desconocido'?'selected':''}>—</option>
+        <option value="dhcp" ${asig==='dhcp'?'selected':''}>DHCP</option>
+        <option value="reservada" ${asig==='reservada'?'selected':''}>Reservada</option>
+        <option value="estatica" ${asig==='estatica'?'selected':''}>Estática</option>
+      </select></td>
+      <td style="font-weight:600;">${d.alias || '—'}</td>
+      <td>${(()=>{
+        const hn = d.hostname || '—';
+        const method = d.hostname_method || '';
+        const conf = d.hostname_confidence || '';
+        const dotClass = {'ptr_dns':'api-lookup','snmp_sysname':'oui-custom','nmap_hostname':'oui-ieee'}[method] || 'null';
+        const methodLabel = {'ptr_dns':'PTR DNS','snmp_sysname':'SNMP sysName','nmap_hostname':'nmap -sV'}[method] || method;
+        const tooltip = method ? `${methodLabel} (conf: ${conf}%)` : '';
+        return `<span class="vendor-badge"${tooltip ? ` title="${tooltip}"` : ''}><span class="method-dot ${dotClass}"></span>${hn}</span>`;
+      })()}</td>
+      <td style="font-size:10px;color:var(--muted);font-family:monospace;">${d.mac || '—'}</td>
+      <td style="font-size:10px;color:var(--muted);">${(()=>{
+        const fab = d.fabricante || '—';
+        const method = d.vendor_method || '';
+        const conf = d.vendor_confidence || '';
+        const dotClass = {'mac_exact':'mac-exact','oui_custom':'oui-custom','oui_ieee':'oui-ieee','api_lookup':'api-lookup','port_heuristic':'port-heuristic'}[method] || 'null';
+        const methodLabel = {'mac_exact':'MAC exacta','oui_custom':'OUI custom','oui_ieee':'OUI IEEE','api_lookup':'API externa','port_heuristic':'Puerto heuristic'}[method] || method;
+        const tooltip = method ? `${methodLabel} (conf: ${conf}%)` : '';
+        return `<span class="vendor-badge"${tooltip ? ` title="${tooltip}"` : ''}><span class="method-dot ${dotClass}"></span>${fab}</span>`;
+      })()}</td>
+      <td><span class="tipo-tag" style="${(()=>{const c={router:'#00c8d4',servidor:'#4ad8e6',computadora:'#d0d4e0',camara:'#22C55E',impresora:'#cc8800',dispositivo:'#707888'}[d.tipo];return c?'color:'+c+';border-color:'+c+'44':'color:var(--teal-lt)'})()}}">${d.tipo || 'desconocido'}</span></td>
+      <td><span class="status-dot ${dotClass}"></span>${estadoTexto}</td>
+      <td>${latStr}</td>
+      <td>${ultima}</td>
+      <td><button class="btn btn-sm" onclick="eliminarDispositivo(${d.id}, '${escapeAttr(d.ip)}')">🗑️</button> <button class="btn btn-sm" onclick="verServicios(${d.id}, '${escapeAttr(d.ip)}')">🔍</button> <button class="btn btn-sm" onclick="verCredenciales(${d.id}, '${escapeAttr(d.ip)}')">🔑</button> <button class="btn btn-sm" onclick="verComentarios(${d.id}, '${escapeAttr(d.ip)}')">💬</button></td>
+    `;
+    const sel = tr.querySelector('.asig-select');
+    sel.addEventListener('change', async function() {
+      try {
+        await apiFetch('/api/dispositivos/' + this.dataset.id + '/asignacion-ip', {
+          method: 'PATCH',
+          body: JSON.stringify({tipo_asignacion_ip: this.value}),
+        });
+        const newColor = asigColor[this.value] || '#9ca3af';
+        tr.querySelector('td:first-child').style.color = newColor;
+        toast('Asignación actualizada');
+      } catch (e) {
+        this.value = asig;
+        toast('Error al actualizar');
+      }
+    });
+    tbody.appendChild(tr);
+  }
+
+  document.getElementById('contadorHosts').textContent = `${total} hosts`;
+  document.getElementById('pageInfo').textContent = _porPagina === 0 ? `Mostrando todos (${total})` : `Página ${_paginaActual} de ${totalPaginas} (${total} hosts)`;
+  document.getElementById('btnPrev').disabled = _paginaActual <= 1;
+  document.getElementById('btnNext').disabled = _paginaActual >= totalPaginas;
+}
+
+function cambiarPagina(dir) {
+  if (dir === 'prev' && _paginaActual > 1) { _paginaActual--; _renderizarPagina(); }
+  else if (dir === 'next') { _paginaActual++; _renderizarPagina(); }
+  else if (dir === 'reload') {
+    _porPagina = parseInt(document.getElementById('selectPorPagina').value) || 20;
+    _paginaActual = 1;
+    _renderizarPagina();
+  }
+}
+
 async function cargarDispositivos() {
   try {
-    const data = await apiFetch('/api/dispositivos/con-estado');
-    const tbody = document.getElementById('tablaBody');
-    tbody.innerHTML = '';
-
-    let upCount = 0, downCount = 0;
-    for (const d of data) {
-      const estado = d.estado || 'desconocido';
-      const latencia = d.latencia_ms;
-      const ultima = d.ultima_vez ? new Date(d.ultima_vez).toLocaleString() : '—';
-
-      let dotClass = 'dot-unknown';
-      let estadoTexto = estado;
-      if (estado === 'up') { dotClass = 'dot-up'; upCount++; estadoTexto = 'activo'; }
-      else if (estado === 'degradado') { dotClass = 'dot-degradado'; estadoTexto = 'degradado'; }
-      else if (estado === 'down') { dotClass = 'dot-down'; downCount++; estadoTexto = 'caido'; }
-      else if (estado === 'warn') { dotClass = 'dot-warn'; estadoTexto = 'latencia alta'; }
-
-      const latStr = latencia !== null ? `${latencia.toFixed(0)}ms` : '—';
-
-      const asig = d.tipo_asignacion_ip || 'desconocido';
-      const asigColor = {dhcp:'#3b82f6', reservada:'#22c55e', estatica:'#f97316', desconocido:'#9ca3af'};
-      const ipColor = asigColor[asig] || '#9ca3af';
-
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td style="color:${ipColor};font-weight:600;">${d.ip}</td>
-        <td><select class="asig-select" data-id="${d.id}" style="font-size:11px;padding:2px 2px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);width:100%;min-width:80px;">
-          <option value="desconocido" ${asig==='desconocido'?'selected':''}>—</option>
-          <option value="dhcp" ${asig==='dhcp'?'selected':''}>DHCP</option>
-          <option value="reservada" ${asig==='reservada'?'selected':''}>Reservada</option>
-          <option value="estatica" ${asig==='estatica'?'selected':''}>Estática</option>
-        </select></td>
-        <td style="font-weight:600;">${d.alias || '—'}</td>
-        <td>${(()=>{
-          const hn = d.hostname || '—';
-          const method = d.hostname_method || '';
-          const conf = d.hostname_confidence || '';
-          const dotClass = {'ptr_dns':'api-lookup','snmp_sysname':'oui-custom','nmap_hostname':'oui-ieee'}[method] || 'null';
-          const methodLabel = {'ptr_dns':'PTR DNS','snmp_sysname':'SNMP sysName','nmap_hostname':'nmap -sV'}[method] || method;
-          const tooltip = method ? `${methodLabel} (conf: ${conf}%)` : '';
-          return `<span class="vendor-badge"${tooltip ? ` title="${tooltip}"` : ''}><span class="method-dot ${dotClass}"></span>${hn}</span>`;
-        })()}</td>
-        <td style="font-size:10px;color:var(--muted);font-family:monospace;">${d.mac || '—'}</td>
-        <td style="font-size:10px;color:var(--muted);">${(()=>{
-          const fab = d.fabricante || '—';
-          const method = d.vendor_method || '';
-          const conf = d.vendor_confidence || '';
-          const dotClass = {'mac_exact':'mac-exact','oui_custom':'oui-custom','oui_ieee':'oui-ieee','api_lookup':'api-lookup','port_heuristic':'port-heuristic'}[method] || 'null';
-          const methodLabel = {'mac_exact':'MAC exacta','oui_custom':'OUI custom','oui_ieee':'OUI IEEE','api_lookup':'API externa','port_heuristic':'Puerto heuristic'}[method] || method;
-          const tooltip = method ? `${methodLabel} (conf: ${conf}%)` : '';
-          return `<span class="vendor-badge"${tooltip ? ` title="${tooltip}"` : ''}><span class="method-dot ${dotClass}"></span>${fab}</span>`;
-        })()}</td>
-        <td><span class="tipo-tag" style="${(()=>{const c={router:'#00c8d4',servidor:'#4ad8e6',computadora:'#d0d4e0',camara:'#22C55E',impresora:'#cc8800',dispositivo:'#707888'}[d.tipo];return c?'color:'+c+';border-color:'+c+'44':'color:var(--teal-lt)'})()}}">${d.tipo || 'desconocido'}</span></td>
-        <td><span class="status-dot ${dotClass}"></span>${estadoTexto}</td>
-        <td>${latStr}</td>
-        <td>${ultima}</td>
-        <td><button class="btn btn-sm" onclick="eliminarDispositivo(${d.id}, '${escapeAttr(d.ip)}')">🗑️</button> <button class="btn btn-sm" onclick="verServicios(${d.id}, '${escapeAttr(d.ip)}')">🔍</button> <button class="btn btn-sm" onclick="verCredenciales(${d.id}, '${escapeAttr(d.ip)}')">🔑</button></td>
-      `;
-      const sel = tr.querySelector('.asig-select');
-      sel.addEventListener('change', async function() {
-        try {
-          await apiFetch('/api/dispositivos/' + this.dataset.id + '/asignacion-ip', {
-            method: 'PATCH',
-            body: JSON.stringify({tipo_asignacion_ip: this.value}),
-          });
-          const newColor = asigColor[this.value] || '#9ca3af';
-          tr.querySelector('td:first-child').style.color = newColor;
-          toast('Asignación actualizada');
-        } catch (e) {
-          this.value = asig;
-          toast('Error al actualizar');
-        }
-      });
-      tbody.appendChild(tr);
-    }
-    document.getElementById('contadorHosts').textContent = `${data.length} hosts`;
+    _datosDispositivos = await apiFetch('/api/dispositivos/con-estado');
+    _paginaActual = 1;
+    _porPagina = parseInt(document.getElementById('selectPorPagina').value) || 20;
+    _renderizarPagina();
   } catch (e) { console.error('Dispositivos error:', e); }
 }
 
@@ -1795,6 +1853,78 @@ function cerrarModalCredenciales() {
   _credencialId = null;
 }
 
+// ── Comentarios ──
+let _comentariosDispositivoId = null;
+
+async function verComentarios(id, ip) {
+  _comentariosDispositivoId = id;
+  document.getElementById('comentariosTitle').textContent = '💬 Comentarios - ' + ip;
+  document.getElementById('inputComentario').value = '';
+  await cargarComentarios();
+  document.getElementById('modalComentarios').classList.add('active');
+}
+
+function cerrarModalComentarios() {
+  document.getElementById('modalComentarios').classList.remove('active');
+  _comentariosDispositivoId = null;
+}
+
+async function cargarComentarios() {
+  const id = _comentariosDispositivoId;
+  if (!id) return;
+  const listEl = document.getElementById('comentariosList');
+  try {
+    const res = await apiFetch('/api/dispositivos/' + id + '/comentarios');
+    if (!res || res.length === 0) {
+      listEl.innerHTML = '<div style="color:var(--muted);font-size:11px;padding:12px 0;text-align:center;">Sin comentarios</div>';
+      return;
+    }
+    listEl.innerHTML = res.map(function(c) {
+      const fecha = c.created_at ? new Date(c.created_at).toLocaleString() : '';
+      return '<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 6px;border-bottom:1px solid var(--border);">' +
+        '<div style="flex:1;"><div style="color:var(--text);font-size:12px;">' + escapeHtml(c.contenido) + '</div>' +
+        '<div style="color:var(--muted);font-size:10px;margin-top:2px;">' + fecha + '</div></div>' +
+        '<button class="btn btn-sm" onclick="eliminarComentario(' + c.id + ')" style="color:var(--down);padding:1px 6px;font-size:11px;">✕</button>' +
+        '</div>';
+    }).join('');
+  } catch (e) {
+    listEl.innerHTML = '<div style="color:var(--down);font-size:11px;">Error cargando comentarios</div>';
+  }
+}
+
+async function agregarComentario() {
+  const id = _comentariosDispositivoId;
+  const contenido = document.getElementById('inputComentario').value.trim();
+  if (!id || !contenido) return;
+  try {
+    await apiFetch('/api/dispositivos/' + id + '/comentarios', {
+      method: 'POST',
+      body: JSON.stringify({ contenido: contenido }),
+    });
+    document.getElementById('inputComentario').value = '';
+    await cargarComentarios();
+  } catch (e) {
+    toast('Error al agregar comentario');
+  }
+}
+
+async function eliminarComentario(comId) {
+  const id = _comentariosDispositivoId;
+  if (!id || !confirm('Eliminar este comentario?')) return;
+  try {
+    await apiFetch('/api/dispositivos/' + id + '/comentarios/' + comId, { method: 'DELETE' });
+    await cargarComentarios();
+  } catch (e) {
+    toast('Error al eliminar comentario');
+  }
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
 async function borrarAlertas() {
   if (!confirm('¿Borrar todas las alertas?')) return;
   try {
@@ -1980,10 +2110,11 @@ async function ejecutarReconciliacion(clave) {
       method: 'POST',
       headers: { 'X-Admin-Key': clave },
     });
+    const exactPart = res.mac_exact_resueltos > 0 ? `, ${res.mac_exact_resueltos} exact` : '';
     const apiPart = res.api_resueltos > 0 ? `, ${res.api_resueltos} por API` : '';
     const portPart = res.port_resueltos > 0 ? `, ${res.port_resueltos} por puertos` : '';
     const hnPart = res.hostnames_resueltos > 0 ? `, ${res.hostnames_resueltos} hostnames` : '';
-    toast(`Reconciliación: ${res.corregidos_tipo} tipos, ${res.corregidos_fab} fabricantes${apiPart}${portPart}${hnPart}`);
+    toast(`Reconciliación: ${res.corregidos_tipo} tipos, ${res.corregidos_fab} fabricantes${exactPart}${apiPart}${portPart}${hnPart}`);
     cargarDatos();
   } catch (e) {
     toast('Error: ' + (e.message.includes('403') ? 'Clave incorrecta' : e.message));

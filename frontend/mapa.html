@@ -988,7 +988,10 @@ function reconciliarRed() {
   }).then(function(res) {
     var ct = res.corregidos_tipo || 0;
     var cf = res.corregidos_fab || 0;
-    alert('Reconciliación: ' + ct + ' tipos, ' + cf + ' fabricantes corregidos');
+    var exact = res.mac_exact_resueltos ? ', ' + res.mac_exact_resueltos + ' exact' : '';
+    var api = res.api_resueltos ? ', ' + res.api_resueltos + ' API' : '';
+    var port = res.port_resueltos ? ', ' + res.port_resueltos + ' port' : '';
+    alert('Reconciliación: ' + ct + ' tipos, ' + cf + ' fabricantes' + exact + api + port);
     cargarTopologia();
   }).catch(function(e) {
     alert('❌ ' + (e.message.includes('403') ? 'Clave incorrecta' : e.message));

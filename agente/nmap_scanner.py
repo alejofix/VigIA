@@ -730,6 +730,13 @@ def _es_mac_aleatoria(mac: str) -> bool:
 
 
 def detectar_fabricante(mac: str, vendor_nmap: str = "", hostname: str = "", session=None) -> str:
+    # 1. MAC exacta en BD (más precisa, overridea todo)
+    if mac and session:
+        mac_norm = _normalizar_mac(mac)
+        exact = session.query(MacVendorExact).filter_by(mac=mac_norm).first()
+        if exact:
+            return exact.vendor
+    # 2. Vendor reportado por nmap
     if vendor_nmap and vendor_nmap.strip():
         return vendor_nmap.strip()
     if hostname:
@@ -737,12 +744,9 @@ def detectar_fabricante(mac: str, vendor_nmap: str = "", hostname: str = "", ses
         for patron, marca in HOSTNAME_FABRICANTE:
             if h.startswith(patron) or patron in h:
                 return marca
-    # Consultar BD antes del dict hardcodeado
+    # 3. OUI en BD
     if mac and session:
         mac_norm = _normalizar_mac(mac)
-        exact = session.query(MacVendorExact).filter_by(mac=mac_norm).first()
-        if exact:
-            return exact.vendor
         oui = _oui_de_mac(mac_norm)
         if oui:
             custom = session.query(OuiVendor).filter_by(oui=oui, source="custom").first()
@@ -901,6 +905,12 @@ def _agregar_o_actualizar(session, ip, hostname, mac, fabricante, tipo, servicio
     octetos = ip.split(".")
     segmento_ip = f"{octetos[0]}.{octetos[1]}.{octetos[2]}.0/24" if len(octetos) == 4 else ""
     existente = session.query(Dispositivo).filter_by(ip=ip, cliente_id=cid).first()
+    if not existente and mac:
+        mac_existente = session.query(Dispositivo).filter_by(mac=mac, cliente_id=cid).first()
+        if mac_existente and mac_existente.ip != ip:
+            logger.info(f"MAC {mac} cambió IP: {mac_existente.ip} → {ip}")
+            mac_existente.ip = ip
+            existente = mac_existente
     if existente:
         if hostname:
             existente.hostname = hostname
@@ -990,7 +1000,7 @@ def escanear(rango_ip: str, nombre_cliente: str, timeout: int = 300) -> dict:
         local_ip = _ip_local()
         local_mac = _mac_local(local_ip)
         if local_ip and local_mac and not any(h["ip"] == local_ip for h in hosts_info):
-            hosts_info.append({"ip": local_ip, "mac": local_mac, "fabricante": detectar_fabricante(local_mac)})
+            hosts_info.append({"ip": local_ip, "mac": local_mac, "fabricante": detectar_fabricante(local_mac, session=session)})
 
         hosts_info_dict = {}
         for h in hosts_info:
@@ -1313,7 +1323,7 @@ def reconciliar_dispositivos(session: Session, cid: int = 0) -> dict:
     if cid == 0:
         from backend.models import Cliente
         clientes = session.query(Cliente).all()
-        totales = {"corregidos_tipo": 0, "corregidos_fab": 0, "api_resueltos": 0, "port_resueltos": 0, "hostnames_resueltos": 0}
+        totales = {"corregidos_tipo": 0, "corregidos_fab": 0, "api_resueltos": 0, "port_resueltos": 0, "mac_exact_resueltos": 0, "hostnames_resueltos": 0}
         for cli in clientes:
             res = reconciliar_dispositivos(session, cli.id)
             for k in totales:
@@ -1326,6 +1336,7 @@ def reconciliar_dispositivos(session: Session, cid: int = 0) -> dict:
     corregidos_fab = 0
     api_resueltos = 0
     port_resueltos = 0
+    mac_exact_resueltos = 0
     hostnames_resueltos = 0
     for d in dispositivos:
         cambios = False
@@ -1385,6 +1396,8 @@ def reconciliar_dispositivos(session: Session, cid: int = 0) -> dict:
                     api_resueltos += 1
                 elif res["method"] == "port_heuristic":
                     port_resueltos += 1
+                elif res["method"] == "mac_exact":
+                    mac_exact_resueltos += 1
                 elif res["method"] == "oui_custom" or res["method"] == "oui_ieee":
                     pass
 
@@ -1409,12 +1422,13 @@ def reconciliar_dispositivos(session: Session, cid: int = 0) -> dict:
             logger.info(f"Reconciliado {d.ip}: tipo={d.tipo}, fabricante={d.fabricante} ({d.vendor_method}/{d.vendor_confidence})")
     if corregidos_tipo or corregidos_fab or hostnames_resueltos:
         session.commit()
-        logger.info(f"Reconciliación: {corregidos_tipo} tipos, {corregidos_fab} fabricantes ({api_resueltos} API, {port_resueltos} port), {hostnames_resueltos} hostnames")
+        logger.info(f"Reconciliación: {corregidos_tipo} tipos, {corregidos_fab} fabricantes ({mac_exact_resueltos} exact, {api_resueltos} API, {port_resueltos} port), {hostnames_resueltos} hostnames")
     return {
         "corregidos_tipo": corregidos_tipo,
         "corregidos_fab": corregidos_fab,
         "api_resueltos": api_resueltos,
         "port_resueltos": port_resueltos,
+        "mac_exact_resueltos": mac_exact_resueltos,
         "hostnames_resueltos": hostnames_resueltos,
     }
 

@@ -17,17 +17,18 @@ import speedtest as st_lib
 import uuid
 
 from backend.database import init_db, get_session, get_or_create_cliente
-from backend.models import Cliente, Dispositivo, Ping, Alerta, Servicio, PosicionTopologia, Credencial, MacVendorExact, SegmentoExtra
+from backend.models import Cliente, Dispositivo, Ping, Alerta, Servicio, PosicionTopologia, Credencial, MacVendorExact, SegmentoExtra, ComentarioDispositivo
 from backend.schemas import (
     DispositivoCreate, DispositivoOut, DispositivoConEstado,
     PingOut, ServicioOut, AlertaOut,
     ScanRequest, PosicionUpdate, StatsOut, CredencialCreate, CredencialOut,
     ChatRequest, NotificacionRequest,
     SegmentoExtraCreate, SegmentoExtraOut,
+    ComentarioCreate, ComentarioOut,
 )
 from concurrent.futures import ThreadPoolExecutor
 import agente.nmap_scanner as nmap_scanner
-from agente.nmap_scanner import reconciliar_dispositivos, descubrir_nuevos, _SNMP_DISPONIBLE
+from agente.nmap_scanner import reconciliar_dispositivos, descubrir_nuevos, _SNMP_DISPONIBLE, _normalizar_mac
 from agente.icmp_poller import ciclo_polling
 from agente.snmp_reader import obtener_info_dispositivo
 from exportar.generar_reporte import generar as generar_reporte
@@ -230,6 +231,13 @@ async def obtener_dispositivo(dispositivo_id: int, nombre_cliente: str = Query("
         session.close()
 
 
+def _normalizar_mac_simple(mac: str) -> str:
+    raw = mac.strip().upper().replace("-", "").replace(":", "").replace(".", "")
+    if len(raw) != 12:
+        return mac.strip().upper()
+    return ":".join(raw[i:i+2] for i in range(0, 12, 2))
+
+
 @app.post("/api/dispositivos", response_model=DispositivoOut, status_code=201)
 async def crear_dispositivo(data: DispositivoCreate, nombre_cliente: str = Query("red_cliente")):
     session = get_session()
@@ -242,6 +250,22 @@ async def crear_dispositivo(data: DispositivoCreate, nombre_cliente: str = Query
         )
         if existente:
             raise HTTPException(400, f"El IP {data.ip} ya existe")
+        if data.mac:
+            mac_norm = _normalizar_mac_simple(data.mac)
+            mac_existente = (
+                session.query(Dispositivo)
+                .filter_by(mac=mac_norm, cliente_id=cid)
+                .first()
+            )
+            if mac_existente:
+                raise HTTPException(
+                    400,
+                    f"La MAC {mac_norm} ya existe en {mac_existente.ip} ({mac_existente.hostname or 'sin hostname'})",
+                )
+            if not data.fabricante:
+                exact = session.query(MacVendorExact).filter_by(mac=mac_norm).first()
+                if exact:
+                    data.fabricante = exact.vendor
         d = Dispositivo(**data.model_dump(), cliente_id=cid)
         d.ultima_vez = datetime.now()
         session.add(d)
@@ -471,6 +495,59 @@ async def re_detectar_serial(
     except Exception as e:
         session.rollback()
         raise HTTPException(500, f"Error re-detectando serial: {str(e)}")
+    finally:
+        session.close()
+
+
+@app.get("/api/dispositivos/{dispositivo_id}/comentarios", response_model=list[ComentarioOut])
+async def listar_comentarios(dispositivo_id: int, nombre_cliente: str = Query("red_cliente")):
+    session = get_session()
+    try:
+        cid = get_or_create_cliente(session, nombre_cliente)
+        disp = session.query(Dispositivo).filter_by(id=dispositivo_id, cliente_id=cid).first()
+        if not disp:
+            raise HTTPException(404, "Dispositivo no encontrado")
+        return (
+            session.query(ComentarioDispositivo)
+            .filter_by(dispositivo_id=dispositivo_id)
+            .order_by(ComentarioDispositivo.created_at.desc())
+            .all()
+        )
+    finally:
+        session.close()
+
+
+@app.post("/api/dispositivos/{dispositivo_id}/comentarios", response_model=ComentarioOut, status_code=201)
+async def crear_comentario(dispositivo_id: int, data: ComentarioCreate, nombre_cliente: str = Query("red_cliente")):
+    session = get_session()
+    try:
+        cid = get_or_create_cliente(session, nombre_cliente)
+        disp = session.query(Dispositivo).filter_by(id=dispositivo_id, cliente_id=cid).first()
+        if not disp:
+            raise HTTPException(404, "Dispositivo no encontrado")
+        com = ComentarioDispositivo(dispositivo_id=dispositivo_id, contenido=data.contenido)
+        session.add(com)
+        session.commit()
+        session.refresh(com)
+        return com
+    finally:
+        session.close()
+
+
+@app.delete("/api/dispositivos/{dispositivo_id}/comentarios/{comentario_id}")
+async def eliminar_comentario(dispositivo_id: int, comentario_id: int, nombre_cliente: str = Query("red_cliente")):
+    session = get_session()
+    try:
+        cid = get_or_create_cliente(session, nombre_cliente)
+        disp = session.query(Dispositivo).filter_by(id=dispositivo_id, cliente_id=cid).first()
+        if not disp:
+            raise HTTPException(404, "Dispositivo no encontrado")
+        com = session.query(ComentarioDispositivo).filter_by(id=comentario_id, dispositivo_id=dispositivo_id).first()
+        if not com:
+            raise HTTPException(404, "Comentario no encontrado")
+        session.delete(com)
+        session.commit()
+        return {"ok": True}
     finally:
         session.close()
 
@@ -805,7 +882,7 @@ async def agregar_mac_vendor(
         raise HTTPException(403, "Clave de seguridad inválida")
     session = get_session()
     try:
-        mac = body.get("mac", "").upper().strip()
+        mac = _normalizar_mac(body.get("mac", ""))
         vendor = body.get("vendor", "").strip()
         confidence = body.get("confidence", 85)
         if not mac or not vendor:
@@ -844,7 +921,7 @@ async def importar_mac_vendor(
         insertados = 0
         actualizados = 0
         for entry in entries:
-            mac = entry.get("mac", "").upper().strip()
+            mac = _normalizar_mac(entry.get("mac", ""))
             vendor = entry.get("vendor", "").strip()
             confidence = entry.get("confidence", 85)
             if not mac or not vendor:
@@ -879,7 +956,7 @@ async def reconciliar_red(
     try:
         if todas:
             clientes = session.query(Cliente).all()
-            totales = {"corregidos_tipo": 0, "corregidos_fab": 0, "api_resueltos": 0, "port_resueltos": 0, "hostnames_resueltos": 0}
+            totales = {"corregidos_tipo": 0, "corregidos_fab": 0, "api_resueltos": 0, "port_resueltos": 0, "mac_exact_resueltos": 0, "hostnames_resueltos": 0}
             for cli in clientes:
                 res = reconciliar_dispositivos(session, cli.id)
                 for k in totales:
@@ -893,6 +970,7 @@ async def reconciliar_red(
             "corregidos_fab": res["corregidos_fab"],
             "api_resueltos": res.get("api_resueltos", 0),
             "port_resueltos": res.get("port_resueltos", 0),
+            "mac_exact_resueltos": res.get("mac_exact_resueltos", 0),
             "hostnames_resueltos": res.get("hostnames_resueltos", 0),
         }
     except Exception as e:

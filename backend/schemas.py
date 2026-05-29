@@ -129,6 +129,18 @@ class CredencialOut(BaseModel):
     observacion: Optional[str] = ""
 
 
+class ComentarioCreate(BaseModel):
+    contenido: str
+
+
+class ComentarioOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    dispositivo_id: int
+    contenido: str
+    created_at: datetime
+
+
 class SegmentoExtraCreate(BaseModel):
     rango: str
     descripcion: Optional[str] = ""

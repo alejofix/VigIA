@@ -20,6 +20,7 @@ logger = logging.getLogger("importar_mac_vendor")
 
 from backend.database import init_db, get_session
 from backend.models import MacVendorExact
+from agente.nmap_scanner import _normalizar_mac
 
 
 def importar_csv(ruta: str):
@@ -34,7 +35,7 @@ def importar_csv(ruta: str):
                 row = [c.strip() for c in row]
                 if len(row) < 2:
                     continue
-                mac = row[0].upper()
+                mac = _normalizar_mac(row[0])
                 vendor = row[1]
                 conf = int(row[2]) if len(row) > 2 and row[2] else 85
                 if not mac or not vendor:

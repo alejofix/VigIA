@@ -146,6 +146,17 @@ class MacVendorExact(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
+class ComentarioDispositivo(Base):
+    __tablename__ = "comentarios_dispositivo"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    dispositivo_id = Column(Integer, ForeignKey("dispositivos.id", ondelete="CASCADE"), nullable=False)
+    contenido = Column(Text, nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+
+    dispositivo = relationship("Dispositivo")
+
+
 class SegmentoExtra(Base):
     __tablename__ = "segmentos_extra"
 
