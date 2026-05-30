@@ -1,0 +1,49 @@
+============================================================
+  VigIA - Reporte de Red
+  Cliente: red_cliente
+  Fecha: 2026-05-30 10:58
+============================================================
+
+Resumen:
+  Total dispositivos: 17
+  Activos:           9
+  Caidos:            4
+  Alertas pendientes: 8
+
+------------------------------------------------------------------------------------------------------------------------
+Dispositivos:
+------------------------------------------------------------------------------------------------------------------------
+IP               Hostname         MAC                Alias          Usuario        Clave Admin    Clave App      Estado     Latencia
+------------------------------------------------------------------------------------------------------------------------
+10.111.51.102    —                9e:bb:37:76:23:de  —              —              —              —              down       —       
+192.168.1.1      _gateway         74:24:9f:fa:a3:da  —              —              —              —              up         1ms     
+192.168.1.104    —                92:76:e3:8a:21:95  —              —              —              —              down       —       
+192.168.1.136    —                0a:67:84:db:5c:5d  —              —              —              —              down       —       
+192.168.1.137    —                8c:05:28:1b:9f:78  —              —              —              —              up         1ms     
+192.168.1.153    —                78:e6:1c:ee:87:5c  —              —              —              —              up         247ms   
+192.168.1.155    —                —                  —              —              —              —              desconocido —       
+192.168.1.170    ThinkPad-L14     —                  —              —              —              —              desconocido —       
+192.168.1.37     —                a0:bd:1d:bd:c5:1d  —              —              —              —              up         2ms     
+192.168.1.49     —                ac:b9:2f:e4:57:d7  —              —              —              —              up         2ms     
+192.168.1.50     —                80:7c:62:05:53:da  —              —              —              —              up         1ms     
+192.168.1.51     —                —                  —              —              —              —              desconocido —       
+192.168.1.58     —                58:8f:cf:55:f4:20  —              —              —              —              up         1ms     
+192.168.1.59     —                1c:4d:89:ef:b2:fe  —              —              —              —              up         0ms     
+192.168.1.68     ThinkPad-L14     74:4c:a1:cf:0a:e5  —              —              —              —              down       —       
+192.168.1.83     —                d8:32:14:7e:d8:a8  —              —              —              —              up         1ms     
+
+------------------------------------------------------------
+Alertas pendientes:
+------------------------------------------------------------
+  [2026-05-30 10:30] caida: Dispositivo 192.168.1.58 caido tras estar activo
+  [2026-05-30 10:30] caida: Dispositivo 192.168.1.49 caido tras estar activo
+  [2026-05-30 10:30] caida: Dispositivo 192.168.1.37 caido tras estar activo
+  [2026-05-30 10:25] caida: Dispositivo 192.168.1.153 caido tras estar activo
+  [2026-05-30 10:18] caida: Dispositivo 192.168.1.68 caido tras estar activo
+  [2026-05-30 10:18] caida: Dispositivo 10.111.51.102 caido tras estar activo
+  [2026-05-30 10:18] caida: Dispositivo 192.168.1.136 caido tras estar activo
+  [2026-05-30 10:18] caida: Dispositivo 192.168.1.104 caido tras estar activo
+
+============================================================
+  Generado por VigIA v0.1 - MARDAN Colombia
+============================================================

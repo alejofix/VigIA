@@ -11,6 +11,7 @@ from fastapi import FastAPI, HTTPException, Query, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
+from html import escape
 from sqlalchemy import func, case
 from sqlalchemy.orm import Session
 import speedtest as st_lib
@@ -222,6 +223,89 @@ async def listar_segmentos(nombre_cliente: str = Query("red_cliente")):
         session.close()
 
 
+@app.get("/api/dispositivos/duplicados")
+async def listar_duplicados(
+    nombre_cliente: str = Query("red_cliente"),
+):
+    session = get_session()
+    try:
+        cid = get_or_create_cliente(session, nombre_cliente)
+        dispositivos = session.query(Dispositivo).filter_by(cliente_id=cid, activo=1).all()
+
+        ids = [d.id for d in dispositivos]
+        max_ids = (
+            session.query(
+                Ping.dispositivo_id,
+                func.max(Ping.id).label("max_id"),
+            )
+            .filter(Ping.dispositivo_id.in_(ids))
+            .group_by(Ping.dispositivo_id)
+            .subquery()
+        )
+        ultimos = session.query(Ping).join(max_ids, Ping.id == max_ids.c.max_id).all()
+        ping_estado = {p.dispositivo_id: p.estado for p in ultimos}
+
+        def estado(d):
+            if d.transparente:
+                return "transparente"
+            return ping_estado.get(d.id, "desconocido")
+
+        def _prioridad(d):
+            return {"up": 3, "desconocido": 2, "down": 1, "transparente": 0}.get(estado(d), -1)
+
+        def _mejor(grupo):
+            return max(grupo, key=_prioridad)
+
+        grupos_mac = {}
+        for d in dispositivos:
+            mac = (d.mac or "").strip()
+            if not mac or mac in ("—", "-"):
+                continue
+            grupos_mac.setdefault(mac, []).append(d)
+
+        grupos_hn = {}
+        for d in dispositivos:
+            hn = (d.hostname or "").strip()
+            if not hn or hn in ("—", "-"):
+                continue
+            grupos_hn.setdefault(hn, []).append(d)
+
+        duplicados = []
+        handled = set()
+        for mac, group in grupos_mac.items():
+            if len(group) < 2:
+                continue
+            mejor = _mejor(group)
+            peores = [d for d in group if d.id != mejor.id]
+            for d in peores:
+                duplicados.append({
+                    "eliminar_id": d.id, "eliminar_ip": d.ip, "eliminar_estado": estado(d),
+                    "mac": d.mac, "hostname": d.hostname,
+                    "conserva_id": mejor.id, "conserva_ip": mejor.ip, "conserva_estado": estado(mejor),
+                })
+                handled.add(d.id)
+            handled.add(mejor.id)
+
+        for hn, group in grupos_hn.items():
+            if len(group) < 2:
+                continue
+            group = [d for d in group if d.id not in handled]
+            if len(group) < 2:
+                continue
+            mejor = _mejor(group)
+            peores = [d for d in group if d.id != mejor.id]
+            for d in peores:
+                duplicados.append({
+                    "eliminar_id": d.id, "eliminar_ip": d.ip, "eliminar_estado": estado(d),
+                    "mac": d.mac, "hostname": d.hostname,
+                    "conserva_id": mejor.id, "conserva_ip": mejor.ip, "conserva_estado": estado(mejor),
+                })
+
+        return {"ok": True, "duplicados": duplicados, "total": len(duplicados)}
+    finally:
+        session.close()
+
+
 @app.get("/api/dispositivos/{dispositivo_id}", response_model=DispositivoOut)
 async def obtener_dispositivo(dispositivo_id: int, nombre_cliente: str = Query("red_cliente")):
     session = get_session()
@@ -355,6 +439,83 @@ async def eliminar_dispositivo(
         session.delete(d)
         session.commit()
         return {"ok": True, "mensaje": f"Dispositivo {d.ip} eliminado"}
+    finally:
+        session.close()
+
+
+@app.post("/api/dispositivos/quitar-duplicados")
+async def quitar_duplicados(
+    nombre_cliente: str = Query("red_cliente"),
+    x_admin_key: str = Header(None),
+):
+    if x_admin_key != ADMIN_KEY:
+        raise HTTPException(403, "Clave de seguridad inválida")
+    session = get_session()
+    try:
+        cid = get_or_create_cliente(session, nombre_cliente)
+        dispositivos = session.query(Dispositivo).filter_by(cliente_id=cid, activo=1).all()
+
+        ids = [d.id for d in dispositivos]
+        max_ids = (
+            session.query(
+                Ping.dispositivo_id,
+                func.max(Ping.id).label("max_id"),
+            )
+            .filter(Ping.dispositivo_id.in_(ids))
+            .group_by(Ping.dispositivo_id)
+            .subquery()
+        )
+        ultimos = session.query(Ping).join(max_ids, Ping.id == max_ids.c.max_id).all()
+        ping_estado = {p.dispositivo_id: p.estado for p in ultimos}
+
+        def estado(d):
+            if d.transparente:
+                return "transparente"
+            return ping_estado.get(d.id, "desconocido")
+
+        grupos_mac = {}
+        for d in dispositivos:
+            mac = (d.mac or "").strip()
+            if not mac or mac in ("—", "-"):
+                continue
+            grupos_mac.setdefault(mac, []).append(d)
+
+        grupos_hn = {}
+        for d in dispositivos:
+            hn = (d.hostname or "").strip()
+            if not hn or hn in ("—", "-"):
+                continue
+            grupos_hn.setdefault(hn, []).append(d)
+
+        eliminados = []
+        handled = set()
+        for mac, group in grupos_mac.items():
+            if len(group) < 2:
+                continue
+            up = [d for d in group if estado(d) == "up"]
+            down = [d for d in group if estado(d) in ("down", "desconocido", None)]
+            if up and down:
+                for d in down:
+                    eliminados.append({"id": d.id, "ip": d.ip, "mac": d.mac, "hostname": d.hostname, "conserva_id": up[0].id, "conserva_ip": up[0].ip})
+                    session.delete(d)
+                    handled.add(d.id)
+                for d in up:
+                    handled.add(d.id)
+
+        ids_elim = {e["id"] for e in eliminados}
+        for hn, group in grupos_hn.items():
+            if len(group) < 2:
+                continue
+            group = [d for d in group if d.id not in handled]
+            up = [d for d in group if estado(d) == "up"]
+            down = [d for d in group if estado(d) in ("down", "desconocido", None)]
+            if up and down:
+                for d in down:
+                    eliminados.append({"id": d.id, "ip": d.ip, "mac": d.mac, "hostname": d.hostname, "conserva_id": up[0].id, "conserva_ip": up[0].ip})
+                    session.delete(d)
+
+        session.commit()
+        return {"ok": True, "eliminados": eliminados, "total_eliminados": len(eliminados)}
     finally:
         session.close()
 
@@ -1237,9 +1398,24 @@ async def notificar_endpoint(data: NotificacionRequest):
 async def generar_reporte_endpoint(nombre_cliente: str = "red_cliente", formato: str = "html"):
     try:
         ruta = generar_reporte(nombre_cliente, formato)
-        return {"ok": True, "ruta": ruta, "formato": formato}
+        with open(ruta, "r", encoding="utf-8") as f:
+            contenido = f.read()
+        return {"ok": True, "ruta": ruta, "formato": formato, "contenido": contenido}
     except FileNotFoundError as e:
         raise HTTPException(404, str(e))
+    except Exception as e:
+        raise HTTPException(500, f"Error generando reporte: {str(e)}")
+
+
+@app.get("/api/reporte/ver", response_class=HTMLResponse)
+async def ver_reporte(nombre_cliente: str = "red_cliente", formato: str = "html"):
+    try:
+        ruta = generar_reporte(nombre_cliente, formato)
+        with open(ruta, "r", encoding="utf-8") as f:
+            contenido = f.read()
+        if formato == "txt":
+            contenido = "<pre>" + escape(contenido) + "</pre>"
+        return HTMLResponse(content=contenido, headers={"Content-Disposition": "inline", "Content-Type": "text/html; charset=utf-8"})
     except Exception as e:
         raise HTTPException(500, f"Error generando reporte: {str(e)}")
 

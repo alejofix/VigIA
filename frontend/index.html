@@ -123,7 +123,17 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
   .stat-card.down .stat-num { color: var(--down); }
   .stat-card.warn { border-left: 2px solid var(--warn); }
   .stat-card.warn .stat-num { color: var(--warn); }
-  .table-wrap { overflow-x: auto; overflow-y: hidden; background: rgba(10,10,18,0.4); position: relative; }
+  .table-wrap { overflow-x: auto; overflow-y: auto; background: rgba(10,10,18,0.4); position: relative; }
+  .scroll-top { overflow-x: auto; overflow-y: hidden; height: 8px; margin-bottom: -1px; }
+  .scroll-top::-webkit-scrollbar { height: 6px; }
+  .scroll-top::-webkit-scrollbar-track { background: transparent; }
+  .scroll-top::-webkit-scrollbar-thumb { background: rgba(0,200,212,0.15); border-radius: 3px; }
+  .scroll-top::-webkit-scrollbar-thumb:hover { background: rgba(0,200,212,0.3); }
+  .scroll-top-inner { height: 1px; }
+  .table-wrap::-webkit-scrollbar { width: 6px; height: 6px; }
+  .table-wrap::-webkit-scrollbar-track { background: transparent; }
+  .table-wrap::-webkit-scrollbar-thumb { background: rgba(0,200,212,0.15); border-radius: 3px; }
+  .table-wrap::-webkit-scrollbar-thumb:hover { background: rgba(0,200,212,0.3); }
   table { width: 100%; border-collapse: collapse; font-size: 11px; }
   .table-dispositivos { min-width: 1100px; }
   thead th {
@@ -384,16 +394,14 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
   .count { color: var(--muted); font-size: 9px; }
   #errorMsg { display:none; position:fixed; top:60px; left:50%; transform:translateX(-50%); z-index:999; background:#2a0f0f; border:1px solid #e84848; color:#e84848; padding:8px 16px; border-radius:var(--radius); font-size:11px; max-width:80%; text-align:center; }
 
-  /* ── Actions dropdown ── */
-  .actions-wrapper { position: relative; display: inline-block; }
-  .actions-btn { cursor: pointer; padding: 2px 8px; font-size: 14px; line-height: 1; border: 1px solid transparent; border-radius: var(--radius); background: transparent; color: var(--muted); }
-  .actions-btn:hover, .actions-btn:focus { border-color: rgba(0,200,212,0.25); color: var(--teal); background: rgba(0,200,212,0.03); outline: none; }
-  .actions-dropdown { display: none; position: absolute; right: 0; top: 100%; z-index: 500; min-width: 170px; background: #0f0f18; border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 0; }
-  .actions-dropdown.open { display: block; }
-  .actions-dropdown a { display: flex; align-items: center; gap: 8px; padding: 6px 14px; color: var(--muted); text-decoration: none; font-size: 11px; font-family: var(--font); cursor: pointer; white-space: nowrap; }
-  .actions-dropdown a:hover { background: var(--hover); color: var(--text); }
-  .actions-dropdown a.danger { color: var(--down); }
-  .actions-dropdown a.danger:hover { background: rgba(232,72,72,0.08); }
+  /* ── Action icons (monochrome) ── */
+  .action-icons { display: flex; gap: 2px; }
+  .action-icon-btn {
+    cursor: pointer; padding: 3px; border: none; background: transparent;
+    color: var(--muted); line-height: 1; border-radius: 3px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .action-icon-btn:hover { color: var(--text); background: rgba(0,200,212,0.06); }
 
   /* ── Port badges ── */
   .port-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(0,200,212,0.04); border: 1px solid rgba(0,200,212,0.1); border-radius: var(--radius); padding: 3px 12px; font-size: 11px; color: var(--text); cursor: default; }
@@ -493,6 +501,7 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
             <option value="txt">TXT</option>
           </select>
           <button class="btn" onclick="reconciliarRed()">♻ Reconciliar</button>
+          <button class="btn" onclick="quitarDuplicados()">⊜ Quitar Duplicados</button>
           <button class="btn" onclick="agregarVendor()">➕ Vendor</button>
           <button class="btn" onclick="mostrarModalAgregarEquipo()">➕ Equipo</button>
           <button class="btn" onclick="mostrarModalCleanPings()">− Limpiar</button>
@@ -500,20 +509,21 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
           <span class="contador" id="contador">—</span>
         </div>
 
+        <div class="scroll-top" id="scrollTop"><div class="scroll-top-inner" id="scrollTopInner"></div></div>
         <div class="table-wrap">
           <table class="table-dispositivos">
             <thead><tr>
-              <th data-col="ip" class="th-sortable">IP <span class="sort-arrow"></span><span class="resize-handle"></span></th>
-              <th data-col="asignacion" class="th-sortable">Asignación <span class="sort-arrow"></span><span class="resize-handle"></span></th>
-              <th data-col="alias" class="th-sortable">Alias <span class="sort-arrow"></span><span class="resize-handle"></span></th>
-              <th data-col="hostname" class="th-sortable">Hostname <span class="sort-arrow"></span><span class="resize-handle"></span></th>
-              <th data-col="mac" class="th-sortable">MAC <span class="sort-arrow"></span><span class="resize-handle"></span></th>
-              <th data-col="fabricante" class="th-sortable">Fabricante <span class="sort-arrow"></span><span class="resize-handle"></span></th>
-              <th data-col="tipo" class="th-sortable">Tipo <span class="sort-arrow"></span><span class="resize-handle"></span></th>
-              <th data-col="estado" class="th-sortable">Estado <span class="sort-arrow"></span><span class="resize-handle"></span></th>
-              <th data-col="latencia" class="th-sortable">Latencia <span class="sort-arrow"></span><span class="resize-handle"></span></th>
-              <th style="width:40px;"></th>
-              <th data-col="ultima_vez" class="th-sortable">Ultima vez <span class="sort-arrow"></span><span class="resize-handle"></span></th>
+              <th data-col="ip" class="th-sortable" style="width:130px;">IP <span class="sort-arrow"></span><span class="resize-handle"></span></th>
+              <th data-col="asignacion" class="th-sortable" style="width:110px;">Asignación <span class="sort-arrow"></span><span class="resize-handle"></span></th>
+              <th data-col="alias" class="th-sortable" style="width:140px;">Alias <span class="sort-arrow"></span><span class="resize-handle"></span></th>
+              <th data-col="hostname" class="th-sortable" style="width:150px;">Hostname <span class="sort-arrow"></span><span class="resize-handle"></span></th>
+              <th data-col="mac" class="th-sortable" style="width:130px;">MAC <span class="sort-arrow"></span><span class="resize-handle"></span></th>
+              <th data-col="fabricante" class="th-sortable" style="width:150px;">Fabricante <span class="sort-arrow"></span><span class="resize-handle"></span></th>
+              <th data-col="tipo" class="th-sortable" style="width:90px;">Tipo <span class="sort-arrow"></span><span class="resize-handle"></span></th>
+              <th data-col="estado" class="th-sortable" style="width:90px;">Estado <span class="sort-arrow"></span><span class="resize-handle"></span></th>
+              <th data-col="latencia" class="th-sortable" style="width:80px;">Latencia <span class="sort-arrow"></span><span class="resize-handle"></span></th>
+              <th style="width:100px;"></th>
+              <th data-col="ultima_vez" class="th-sortable" style="width:140px;">Ultima vez <span class="sort-arrow"></span><span class="resize-handle"></span></th>
             </tr></thead>
             <tbody id="tablaBody"></tbody>
           </table>
@@ -894,6 +904,21 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
     </div>
   </div>
 
+  <div class="modal-overlay" id="modalDuplicados">
+    <div class="modal" style="width:680px;">
+      <h3>⊜ Equipos duplicados</h3>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:10px;">
+        Se detectaron equipos con la misma MAC pero distinta IP.
+        Los que están <strong style="color:var(--down);">caídos</strong> serán eliminados, conservando los <strong style="color:var(--up);">activos</strong>.
+      </p>
+      <div id="duplicadosLista" style="max-height:300px;overflow-y:auto;font-size:11px;margin-bottom:12px;"></div>
+      <div class="modal-btns">
+        <button class="btn" onclick="cerrarModalDuplicados()">Cancelar</button>
+        <button class="btn btn-primary" id="btnConfirmarDuplicados" onclick="confirmarQuitarDuplicados()" style="display:none;">Eliminar duplicados</button>
+      </div>
+    </div>
+  </div>
+
   <div class="footer">
     <span class="prompt-sym">$</span> <span class="prompt-user">alejo_fix</span> <span class="prompt-at">//</span> <strong style="color:rgba(0,204,119,0.5);font-weight:400;">MARDAN COLOMBIA</strong> <span class="prompt-at">//</span> VIGIA v0.1
   </div>
@@ -938,6 +963,22 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
     <div class="modal-btns">
       <button class="btn" onclick="cerrarModalAdminKey()">Cancelar</button>
       <button class="btn btn-primary" onclick="confirmarAdminKey()">Autorizar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalReporte">
+  <div class="modal wide" style="width:85vw;height:85vh;display:flex;flex-direction:column;padding:0;">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0;">
+      <span id="reporteModalTitulo" style="font-weight:600;color:var(--teal-lt);font-size:13px;">Reporte</span>
+      <div style="display:flex;gap:8px;">
+        <button class="btn" onclick="imprimirReporte()" style="font-size:10px;">🖨 Imprimir</button>
+        <button class="btn" onclick="cerrarReporte()" style="font-size:10px;">✕ Cerrar</button>
+      </div>
+    </div>
+    <div id="reporteContent" style="flex:1;overflow:auto;padding:16px;background:#fff;color:#000;border-radius:0 0 var(--radius) var(--radius);">
+      <pre id="reportePre" style="display:none;font-family:monospace;font-size:13px;white-space:pre-wrap;margin:0;"></pre>
+      <iframe id="reporteIframe" style="display:none;width:100%;height:100%;border:none;border-radius:4px;"></iframe>
     </div>
   </div>
 </div>
@@ -998,18 +1039,7 @@ function escapeAttr(s) {
   return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-// ── Actions dropdown ──
-function toggleActions(btn) {
-  const dd = btn.parentElement.querySelector('.actions-dropdown');
-  const wasOpen = dd.classList.contains('open');
-  document.querySelectorAll('.actions-dropdown.open').forEach(d => d.classList.remove('open'));
-  if (!wasOpen) dd.classList.add('open');
-}
-document.addEventListener('click', function(e) {
-  if (!e.target.closest('.actions-wrapper')) {
-    document.querySelectorAll('.actions-dropdown.open').forEach(d => d.classList.remove('open'));
-  }
-});
+
 
 async function apiFetch(url, opts = {}) {
   const { headers: optsHeaders, sinCliente: _sc, timeout, ...fetchOpts } = opts;
@@ -1175,6 +1205,7 @@ function _initResize() {
         handle.classList.remove('dragging');
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
+        _syncScrollTop();
       }
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);
@@ -1258,12 +1289,12 @@ function _renderizarPagina() {
       <td><span class="tipo-tag" style="${(()=>{const c={router:'#00c8d4',servidor:'#4ad8e6',computadora:'#d0d4e0',camara:'#22C55E',impresora:'#cc8800',dispositivo:'#707888'}[d.tipo];return c?'color:'+c+';border-color:'+c+'44':'color:var(--teal-lt)'})()}}">${d.tipo || 'desconocido'}</span></td>
       <td><span class="status-dot ${dotClass}"></span>${estadoTexto}</td>
       <td>${latStr}</td>
-      <td><div class="actions-wrapper"><button class="actions-btn" onclick="event.stopPropagation();toggleActions(this)">⚙</button><div class="actions-dropdown">
-<a onclick="event.stopPropagation();eliminarDispositivo(${d.id}, '${escapeAttr(d.ip)}')">🗑️ Eliminar</a>
-<a onclick="event.stopPropagation();verServicios(${d.id}, '${escapeAttr(d.ip)}')">🔍 Puertos</a>
-<a onclick="event.stopPropagation();verCredenciales(${d.id}, '${escapeAttr(d.ip)}')">🔑 Credenciales</a>
-<a onclick="event.stopPropagation();verComentarios(${d.id}, '${escapeAttr(d.ip)}')">💬 Notas</a>
-</div></div></td>
+      <td><div class="action-icons">
+<button class="action-icon-btn" onclick="event.stopPropagation();eliminarDispositivo(${d.id}, '${escapeAttr(d.ip)}')" title="Eliminar"><svg viewBox="0 0 14 14" width="11" height="11" fill="currentColor"><path d="M4 0h6l1 2h3v2H0V2h3l1-2zM1 5h12l-1 9H2L1 5z"/></svg></button>
+<button class="action-icon-btn" onclick="event.stopPropagation();verServicios(${d.id}, '${escapeAttr(d.ip)}')" title="Puertos"><svg viewBox="0 0 14 14" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1" y="1" width="12" height="12" rx="1"/><path d="M1 5h12M5 1v12"/></svg></button>
+<button class="action-icon-btn" onclick="event.stopPropagation();verCredenciales(${d.id}, '${escapeAttr(d.ip)}')" title="Credenciales"><svg viewBox="0 0 14 14" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="3" y="7" width="8" height="6" rx="1"/><path d="M5 7V4a2 2 0 114 0v3"/></svg></button>
+<button class="action-icon-btn" onclick="event.stopPropagation();verComentarios(${d.id}, '${escapeAttr(d.ip)}')" title="Notas"><svg viewBox="0 0 14 14" width="11" height="11" fill="currentColor"><path d="M3 1h5l4 4v8a1 1 0 01-1 1H3a1 1 0 01-1-1V2a1 1 0 011-1z"/><path d="M8 1v4h4" fill="none" stroke="currentColor"/></svg></button>
+</div></td>
       <td>${ultima}</td>
     `;
     const sel = tr.querySelector('.asig-select');
@@ -1288,6 +1319,7 @@ function _renderizarPagina() {
   document.getElementById('pageInfo').textContent = _porPagina === 0 ? `Mostrando todos (${total})` : `Página ${_paginaActual} de ${totalPaginas} (${total} hosts)`;
   document.getElementById('btnPrev').disabled = _paginaActual <= 1;
   document.getElementById('btnNext').disabled = _paginaActual >= totalPaginas;
+  _syncScrollTop();
 }
 
 function cambiarPagina(dir) {
@@ -1414,16 +1446,40 @@ async function sincronizarCliente() {
 }
 
 async function generarReporte(formato) {
-  const cliente = clienteActivo();
   toast(`Generando reporte ${formato.toUpperCase()}...`);
   try {
-    const res = await apiFetch('/api/reporte?formato=' + formato, {
-      method: 'POST',
-    });
-    window.open('/' + res.ruta, '_blank');
-    toast(`✅ Reporte ${formato.toUpperCase()} abierto`);
+    const res = await apiFetch('/api/reporte?formato=' + formato, { method: 'POST' });
+    const resp = await fetch(API_BASE + '/' + res.ruta);
+    const contenido = await resp.text();
+    document.getElementById('reporteModalTitulo').textContent = 'Reporte ' + formato.toUpperCase();
+    if (formato === 'html') {
+      document.getElementById('reportePre').style.display = 'none';
+      const ifr = document.getElementById('reporteIframe');
+      ifr.style.display = 'block';
+      ifr.srcdoc = contenido;
+    } else {
+      document.getElementById('reporteIframe').style.display = 'none';
+      const pre = document.getElementById('reportePre');
+      pre.style.display = 'block';
+      pre.textContent = contenido;
+    }
+    document.getElementById('modalReporte').classList.add('active');
+    toast(`✅ Reporte ${formato.toUpperCase()} listo`);
   } catch (e) {
     toast('Error: ' + e.message);
+  }
+}
+
+function cerrarReporte() {
+  document.getElementById('modalReporte').classList.remove('active');
+}
+
+function imprimirReporte() {
+  const ifr = document.getElementById('reporteIframe');
+  if (ifr.style.display === 'block' && ifr.contentWindow) {
+    ifr.contentWindow.print();
+  } else {
+    window.print();
   }
 }
 
@@ -2179,6 +2235,66 @@ async function confirmarAdminKey() {
   else if (accion === 'borrar_dispositivo') await ejecutarBorradoDispositivo(clave, params);
   else if (accion === 'ver_credenciales') await ejecutarVerCredenciales(clave, params);
   else if (accion === 'agregar_equipo') await ejecutarAgregarEquipo(clave);
+  else if (accion === 'quitar_duplicados') await ejecutarQuitarDuplicados(clave);
+}
+
+// ── Quitar duplicados ──
+async function quitarDuplicados() {
+  try {
+    const res = await apiFetch('/api/dispositivos/duplicados');
+    if (!res.duplicados || res.duplicados.length === 0) {
+      toast('No se encontraron equipos duplicados');
+      return;
+    }
+    const lista = document.getElementById('duplicadosLista');
+    let html = `<table style="width:100%;border-collapse:collapse;font-size:11px;">
+      <thead><tr style="color:var(--muted);font-size:9px;text-transform:uppercase;border-bottom:1px solid var(--border);">
+        <th style="padding:4px 6px;text-align:left;">Eliminar</th>
+        <th style="padding:4px 6px;text-align:left;">Conservar</th>
+        <th style="padding:4px 6px;text-align:left;">MAC</th>
+        <th style="padding:4px 6px;text-align:left;">Hostname</th>
+      </tr></thead><tbody>`;
+    for (const dup of res.duplicados) {
+      html += `<tr style="border-bottom:1px solid rgba(24,24,42,0.4);">
+        <td style="padding:4px 6px;color:var(--down);">${dup.eliminar_ip} <span style="font-size:9px;color:var(--muted);">(${dup.eliminar_estado})</span></td>
+        <td style="padding:4px 6px;color:var(--up);">${dup.conserva_ip} <span style="font-size:9px;color:var(--muted);">(${dup.conserva_estado})</span></td>
+        <td style="padding:4px 6px;font-family:monospace;font-size:10px;">${dup.mac || '—'}</td>
+        <td style="padding:4px 6px;">${dup.hostname || '—'}</td>
+      </tr>`;
+    }
+    html += `</tbody></table>`;
+    lista.innerHTML = html;
+    document.getElementById('btnConfirmarDuplicados').style.display = 'inline-block';
+    document.getElementById('modalDuplicados').classList.add('active');
+  } catch (e) {
+    toast('Error al buscar duplicados: ' + e.message);
+  }
+}
+
+function cerrarModalDuplicados() {
+  document.getElementById('modalDuplicados').classList.remove('active');
+}
+
+function confirmarQuitarDuplicados() {
+  cerrarModalDuplicados();
+  mostrarModalAdminKey('quitar_duplicados', {});
+}
+
+async function ejecutarQuitarDuplicados(clave) {
+  try {
+    const res = await apiFetch('/api/dispositivos/quitar-duplicados', {
+      method: 'POST',
+      headers: { 'X-Admin-Key': clave },
+    });
+    if (res.total_eliminados > 0) {
+      toast(`Se eliminaron ${res.total_eliminados} equipo(s) duplicado(s)`);
+    } else {
+      toast('No se encontraron duplicados para eliminar');
+    }
+    cargarDatos();
+  } catch (e) {
+    toast('Error: ' + (e.message.includes('403') ? 'Clave incorrecta' : e.message));
+  }
 }
 
 async function ejecutarBorradoDispositivo(clave, params) {
@@ -2899,12 +3015,25 @@ function togglePollMapa() {
 // ── Speedtest ──
 
 
-// ── Reconciliation / Reset ──
-
-
-
-
-
+// ── Top scroll sync ──
+function _syncScrollTop() {
+  const wrap = document.querySelector('.table-wrap');
+  const inner = document.getElementById('scrollTopInner');
+  if (!wrap || !inner) return;
+  inner.style.width = wrap.scrollWidth + 'px';
+}
+(function() {
+  const top = document.getElementById('scrollTop');
+  const wrap = document.querySelector('.table-wrap');
+  if (!top || !wrap) return;
+  top.addEventListener('scroll', function() {
+    wrap.scrollLeft = this.scrollLeft;
+  });
+  wrap.addEventListener('scroll', function() {
+    top.scrollLeft = this.scrollLeft;
+  });
+  window.addEventListener('resize', _syncScrollTop);
+})();
 
 _initSort();
 _initResize();
