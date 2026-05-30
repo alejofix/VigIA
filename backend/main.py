@@ -473,6 +473,12 @@ async def quitar_duplicados(
                 return "transparente"
             return ping_estado.get(d.id, "desconocido")
 
+        def _prioridad(d):
+            return {"up": 3, "desconocido": 2, "down": 1, "transparente": 0}.get(estado(d), -1)
+
+        def _mejor(grupo):
+            return max(grupo, key=_prioridad)
+
         grupos_mac = {}
         for d in dispositivos:
             mac = (d.mac or "").strip()
@@ -492,26 +498,23 @@ async def quitar_duplicados(
         for mac, group in grupos_mac.items():
             if len(group) < 2:
                 continue
-            up = [d for d in group if estado(d) == "up"]
-            down = [d for d in group if estado(d) in ("down", "desconocido", None)]
-            if up and down:
-                for d in down:
-                    eliminados.append({"id": d.id, "ip": d.ip, "mac": d.mac, "hostname": d.hostname, "conserva_id": up[0].id, "conserva_ip": up[0].ip})
+            mejor = _mejor(group)
+            for d in group:
+                if d.id != mejor.id:
+                    eliminados.append({"id": d.id, "ip": d.ip, "mac": d.mac, "hostname": d.hostname, "conserva_id": mejor.id, "conserva_ip": mejor.ip})
                     session.delete(d)
-                    handled.add(d.id)
-                for d in up:
-                    handled.add(d.id)
+                handled.add(d.id)
 
-        ids_elim = {e["id"] for e in eliminados}
         for hn, group in grupos_hn.items():
             if len(group) < 2:
                 continue
             group = [d for d in group if d.id not in handled]
-            up = [d for d in group if estado(d) == "up"]
-            down = [d for d in group if estado(d) in ("down", "desconocido", None)]
-            if up and down:
-                for d in down:
-                    eliminados.append({"id": d.id, "ip": d.ip, "mac": d.mac, "hostname": d.hostname, "conserva_id": up[0].id, "conserva_ip": up[0].ip})
+            if len(group) < 2:
+                continue
+            mejor = _mejor(group)
+            for d in group:
+                if d.id != mejor.id:
+                    eliminados.append({"id": d.id, "ip": d.ip, "mac": d.mac, "hostname": d.hostname, "conserva_id": mejor.id, "conserva_ip": mejor.ip})
                     session.delete(d)
 
         session.commit()
