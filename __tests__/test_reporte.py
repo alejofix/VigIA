@@ -8,9 +8,8 @@ from backend.models import Dispositivo, Ping, Alerta
 
 @pytest.fixture
 def setup_db():
-    tmp = tempfile.mktemp(suffix=".db")
-    init_db(tmp)
-    session = get_session(tmp)()
+    init_db()
+    session = get_session()()
 
     d1 = Dispositivo(ip="10.0.0.1", hostname="router", tipo="router")
     d2 = Dispositivo(ip="10.0.0.2", hostname="camara-01", tipo="camara")
@@ -26,16 +25,13 @@ def setup_db():
 
     session.close()
 
-    yield tmp
-
-    if os.path.exists(tmp):
-        os.remove(tmp)
+    yield
 
 
 def test_colectar_datos(setup_db):
     from exportar.generar_reporte import _colectar_datos
 
-    session = get_session(setup_db)()
+    session = get_session()()
     try:
         datos = _colectar_datos(session)
         assert datos["total_dispositivos"] == 2
@@ -65,7 +61,7 @@ def test_generar_txt_no_db():
 @patch("exportar.generar_reporte.init_db")
 @patch("exportar.generar_reporte.get_session")
 def test_generar_html(mock_get_session, mock_init_db, mock_exists, setup_db):
-    session = get_session(setup_db)()
+    session = get_session()()
     mock_get_session.return_value = lambda: session
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -92,7 +88,7 @@ def test_generar_html(mock_get_session, mock_init_db, mock_exists, setup_db):
 @patch("exportar.generar_reporte.init_db")
 @patch("exportar.generar_reporte.get_session")
 def test_generar_txt(mock_get_session, mock_init_db, mock_exists, setup_db):
-    session = get_session(setup_db)()
+    session = get_session()()
     mock_get_session.return_value = lambda: session
 
     with tempfile.TemporaryDirectory() as tmp_dir:

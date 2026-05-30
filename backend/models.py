@@ -35,6 +35,7 @@ class Dispositivo(Base):
     segmento = Column(Text)
     serial = Column(Text)
     activo = Column(Integer, default=1)
+    transparente = Column(Integer, default=0)
     tipo_asignacion_ip = Column(Text, default="desconocido")
     vendor_method = Column(Text)
     vendor_confidence = Column(Integer)

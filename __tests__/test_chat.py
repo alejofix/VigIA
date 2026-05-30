@@ -4,13 +4,11 @@ from backend.chat import _obtener_contexto_red
 
 @pytest.fixture
 def db_con_datos():
-    import tempfile, os
     from backend.database import init_db, get_session
     from backend.models import Dispositivo, Ping, Alerta
 
-    tmp = tempfile.mktemp(suffix=".db")
-    init_db(tmp)
-    session = get_session(tmp)()
+    init_db()
+    session = get_session()()
 
     d1 = Dispositivo(ip="10.0.0.1", hostname="gw", tipo="router")
     d2 = Dispositivo(ip="10.0.0.2", hostname="cam-01", tipo="camara")
@@ -26,8 +24,6 @@ def db_con_datos():
 
     yield session
     session.close()
-    if os.path.exists(tmp):
-        os.remove(tmp)
 
 
 def test_obtener_contexto_red(db_con_datos):

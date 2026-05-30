@@ -1,5 +1,3 @@
-import os
-import tempfile
 import pytest
 from sqlalchemy.orm import Session
 
@@ -8,17 +6,9 @@ from backend.models import Dispositivo, Ping, Servicio, Alerta, Base
 
 
 @pytest.fixture
-def db_path():
-    tmp = tempfile.mktemp(suffix=".db")
-    yield tmp
-    if os.path.exists(tmp):
-        os.remove(tmp)
-
-
-@pytest.fixture
-def session(db_path):
-    init_db(db_path)
-    return get_session(db_path)()
+def session():
+    init_db()
+    return get_session()()
 
 
 def test_crear_dispositivo(session: Session):
@@ -116,8 +106,8 @@ def test_cascade_delete(session: Session):
     assert len(alertas) == 0
 
 
-def test_init_db_creates_tables(db_path):
-    engine = init_db(db_path)
+def test_init_db_creates_tables():
+    init_db()
     assert "dispositivos" in [t.name for t in Base.metadata.tables.values()]
     assert "pings" in [t.name for t in Base.metadata.tables.values()]
     assert "servicios" in [t.name for t in Base.metadata.tables.values()]

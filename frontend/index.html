@@ -35,7 +35,7 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
     --down-bg:   rgba(232,72,72,0.06);
     --border:    #18182a;
     --font:      'JetBrains Mono', monospace;
-    --radius:    6px;
+    --radius:    0px;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -47,36 +47,9 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
     min-height: 100vh;
     position: relative;
   }
-  #bgCanvas {
-    position: fixed;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 0;
-    pointer-events: none;
-    opacity: 1;
-  }
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background:
-      repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,200,212,0.004) 2px, rgba(0,200,212,0.004) 4px);
-    pointer-events: none;
-    z-index: 1;
-  }
-  body::after {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background: radial-gradient(ellipse at 50% 0%, rgba(0,200,212,0.01) 0%, transparent 60%);
-    pointer-events: none;
-    z-index: 1;
-  }
+  /* terminal-raw: overlays removed */
   .header {
-    background: rgba(15,15,24,0.92);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    background: #0f0f18;
     border-bottom: 1px solid var(--border);
     padding: 0 24px;
     display: flex;
@@ -89,32 +62,36 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
   }
   .logo {
     font-size: 18px; font-weight: 600; color: var(--teal); letter-spacing: 3px;
-    text-transform: uppercase; position: relative;
+    text-transform: uppercase; position: relative; display: inline-flex; align-items: center;
   }
-  .logo::after {
-    content: '█';
-    font-size: 14px; color: var(--teal); margin-left: 2px;
+  #matrixCanvas {
+    position: absolute; top: 50%; left: 0; transform: translateY(-50%);
+    width: 280px; height: 52px; pointer-events: none; z-index: 0;
+    opacity: 0.3;
+  }
+  .logo-click {
+    cursor: pointer; position: relative; z-index: 1; user-select: none;
+    color: var(--teal);
+  }
+  .logo-click:hover {
+    text-shadow: 0 0 6px rgba(0,200,212,0.5);
+  }
+  #logoIA { color: var(--muted); font-weight: 300; }
+  #logoCursor {
+    display: none;
     animation: blink 1s step-end infinite;
   }
-  .logo span { font-weight: 300; color: var(--muted); letter-spacing: 1px; }
+  .logo-sub { font-weight: 300; color: var(--muted); letter-spacing: 1px; font-size: 9px; margin-left: 8px; position: relative; z-index: 1; }
   @keyframes blink { 50% { opacity: 0; } }
-  @keyframes glitch {
-    0%, 90%, 100% { transform: translate(0); }
-    92% { transform: translate(-1px, 1px); }
-    94% { transform: translate(1px, -1px); }
-    96% { transform: translate(-2px, -1px); }
-    98% { transform: translate(1px, 1px); }
-  }
-  .logo:hover { animation: glitch 0.3s linear; }
+  /* terminal-raw: glitch removed */
   .header-right { display: flex; align-items: center; gap: 12px; }
-  .badge { background: rgba(0,200,212,0.06); border: 1px solid rgba(0,200,212,0.15); color: var(--muted); font-size: 9px; padding: 2px 10px; border-radius: 12px; letter-spacing: 0.05em; }
+  .badge { background: rgba(0,200,212,0.06); border: 1px solid rgba(0,200,212,0.15); color: var(--muted); font-size: 9px; padding: 2px 10px; border-radius: var(--radius); letter-spacing: 0.05em; }
   .container { max-width: 1200px; margin: 0 auto; padding: 20px 24px; position: relative; z-index: 2; }
   .container > .term-window + .term-window { margin-top: 20px; }
   .stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
   .stat-speed {
     grid-column: 1 / -1;
-    background: rgba(12,12,22,0.85);
-    backdrop-filter: blur(6px);
+    background: #0c0c16;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 10px 14px;
@@ -128,23 +105,12 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
   .stat-speed .bar-fill { height:100%; width:0%; background:var(--teal); border-radius:2px; transition:width 0.3s; }
   .stat-speed .btn-speed { margin-left:auto; flex-shrink:0; }
   .stat-card {
-    background: rgba(12,12,22,0.85);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
+    background: #0c0c16;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 12px 14px;
-    transition: border-color 0.2s;
     position: relative;
-    overflow: hidden;
   }
-  .stat-card::before {
-    content: '';
-    position: absolute; top: 0; left: 0; right: 0;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(0,200,212,0.08), transparent);
-  }
-  .stat-card:hover { border-color: rgba(0,200,212,0.12); }
   .stat-card.total { border-color: rgba(0,200,212,0.12); }
   .stat-card.total .stat-num { color: var(--teal-lt); font-size: 24px; }
   .stat-card.alertas { border-color: rgba(232,72,72,0.12); }
@@ -166,9 +132,9 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
     white-space: nowrap; border-bottom: 1px solid rgba(0,200,212,0.12);
     background: rgba(0,200,212,0.02);
   }
-  td { padding: 9px 8px; color: var(--muted); border-bottom: 1px solid rgba(24,24,42,0.6); font-family: var(--font); transition: background 0.15s; white-space: nowrap; }
+  td { padding: 9px 8px; color: var(--muted); border-bottom: 1px solid rgba(24,24,42,0.6); font-family: var(--font); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   tr:last-child td { border-bottom: none; }
-  tbody tr { transition: background 0.1s; }
+  /* terminal-raw: row transition removed */
   tbody tr:hover td { background: rgba(0,200,212,0.03); }
   td:first-child { color: var(--text); font-weight: 500; }
   tr:nth-child(even) td { background: rgba(0,0,0,0.15); }
@@ -179,12 +145,30 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
   .dot-down { background: var(--down); }
   .dot-warn { background: var(--warn); }
   .dot-unknown { background: var(--border); }
-  .tipo-tag { background: rgba(0,200,212,0.04); border: 1px solid rgba(0,200,212,0.08); border-radius: 3px; padding: 1px 6px; font-size: 9px; color: var(--teal-lt); }
+  .dot-transparente { background: #6b7280; }
+  .tipo-tag { background: rgba(0,200,212,0.04); border: 1px solid rgba(0,200,212,0.08); border-radius: var(--radius); padding: 1px 6px; font-size: 9px; color: var(--teal-lt); }
   .controles { display: flex; gap: 6px; padding: 10px 14px 8px; flex-wrap: wrap; align-items: center; border-bottom: 1px solid rgba(24,24,42,0.15); }
+
+  /* ── Sortable columns ── */
+  thead th { user-select: none; }
+  .th-sortable { cursor: pointer; }
+  .th-sortable:hover { background: rgba(0,200,212,0.06); }
+  .sort-arrow { margin-left: 3px; font-size: 8px; display: inline-block; vertical-align: middle; color: var(--muted); }
+  .sort-arrow.active { color: var(--teal); }
+
+  /* ── Column resize ── */
+  .resize-handle {
+    position: absolute; top: 0; right: 0; bottom: 0;
+    width: 5px; cursor: col-resize; z-index: 5;
+  }
+  .resize-handle:hover,
+  .resize-handle.dragging { background: rgba(0,200,212,0.25); }
+  thead th { position: relative; }
+  .table-dispositivos { table-layout: fixed; }
   .btn {
     background: transparent; border: 1px solid var(--border); color: var(--muted);
     padding: 5px 12px; border-radius: var(--radius); font-family: var(--font);
-    font-size: 10px; cursor: pointer; transition: all 0.2s; letter-spacing: 0.02em;
+    font-size: 10px; cursor: pointer; letter-spacing: 0.02em;
     text-decoration: none;
   }
   a.btn { color: var(--muted); }
@@ -194,19 +178,18 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
   .btn-sm { padding: 2px 6px; font-size: 12px; line-height: 1; }
   .btn-mapa { background: rgba(0,200,212,0.1); border-color: rgba(0,200,212,0.25); color: var(--teal); font-size:11px; padding:5px 16px; font-weight:500; }
   .contador { color: var(--muted); font-size: 10px; margin-left: auto; }
-  @keyframes refreshPulse { 0%{opacity:1;} 50%{opacity:0.5;} 100%{opacity:1;} }
-  .refreshing #tablaBody { animation: refreshPulse 0.4s ease; }
+  /* terminal-raw: refresh pulse removed */
   @keyframes spin { to { transform: rotate(360deg); } }
   .spinner { display:inline-block; width:14px; height:14px; border:2px solid var(--border); border-top-color:var(--teal); border-radius:50%; animation:spin 0.8s linear infinite; vertical-align:middle; margin-right:6px; }
   .toast {
-    position: fixed; bottom: 24px; right: 24px; background: rgba(0,200,212,0.9); color: #000;
+    position: fixed; bottom: 24px; right: 24px; background: #00aab3; color: #000;
     padding: 8px 16px; border-radius: var(--radius); font-size: 11px;
     font-weight: 500; opacity: 0; transition: opacity 0.3s; z-index: 10000;
-    pointer-events: none; backdrop-filter: blur(4px);
+    pointer-events: none;
   }
   .toast.show { opacity: 1; }
   /* ── Terminal window ── */
-  .term-window { border: 1px solid var(--border); border-radius: var(--radius); background: rgba(10,10,18,0.6); overflow: hidden; }
+  .term-window { border: 1px solid var(--border); border-radius: var(--radius); background: #0a0a12; overflow: hidden; }
   .term-bar { padding: 8px 14px; border-bottom: 1px solid rgba(24,24,42,0.3); background: rgba(0,0,0,0.25); user-select: none; display: flex; align-items: center; gap: 8px; font-size: 10px; color: var(--muted); font-family: var(--font); }
   .term-bar .prompt-user { color: var(--green); font-weight: 500; }
   .term-bar .prompt-at { color: var(--muted); }
@@ -216,14 +199,12 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
 
   /* ── Modal ── */
   .modal-overlay {
-    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+    display: none; position: fixed; inset: 0; background: #000;
     z-index: 1000; align-items: center; justify-content: center;
   }
   .modal-overlay.active { display: flex; }
   .modal {
-    background: rgba(12,12,22,0.96);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: #0c0c16;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 20px; width: 400px; max-width: 90vw;
@@ -245,7 +226,7 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
   .vendor-badge .method-dot.api-lookup { background: #06b6d4; }
   .vendor-badge .method-dot.port-heuristic { background: #f97316; }
   .vendor-badge .method-dot.null { background: #9ca3af; }
-  .vendor-badge .tooltip-text { visibility: hidden; width: 140px; background: #1a1a2e; color: #d0d4e0; text-align: center; padding: 4px 8px; border-radius: 4px; font-size: 10px; position: absolute; z-index: 1000; bottom: 125%; left: 50%; transform: translateX(-50%); white-space: nowrap; border: 1px solid var(--border); opacity: 0; transition: opacity 0.15s; pointer-events: none; }
+  .vendor-badge .tooltip-text { visibility: hidden; width: 140px; background: #1a1a2e; color: #d0d4e0; text-align: center; padding: 4px 8px; border-radius: var(--radius); font-size: 10px; position: absolute; z-index: 1000; bottom: 125%; left: 50%; transform: translateX(-50%); white-space: nowrap; border: 1px solid var(--border); opacity: 0; transition: opacity 0.15s; pointer-events: none; }
   .vendor-badge:hover .tooltip-text { visibility: visible; opacity: 1; }
 
   /* ── Footer ── */
@@ -262,19 +243,8 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
     font-family: var(--font);
     font-size: 13px;
   }
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background:
-      repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,200,212,0.004) 2px, rgba(0,200,212,0.004) 4px);
-    pointer-events: none;
-    z-index: 1;
-  }
   .header {
-    background: rgba(15,15,24,0.92);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    background: #0f0f18;
     border-bottom: 1px solid var(--border);
     padding: 0 24px;
     display: flex;
@@ -284,13 +254,13 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
     position: relative;
     z-index: 100;
   }
-  .logo { font-size: 18px; font-weight: 600; color: var(--teal); letter-spacing: 3px; text-transform: uppercase; }
-  .logo span { font-weight: 300; color: var(--muted); letter-spacing: 1px; }
+  .logo { font-size: 18px; font-weight: 600; color: var(--teal); letter-spacing: 3px; text-transform: uppercase; display: inline-flex; align-items: center; }
+  .logo-sub { font-weight: 300; color: var(--muted); letter-spacing: 1px; font-size: 9px; margin-left: 8px; position: relative; z-index: 1; }
   .header-right { display: flex; align-items: center; gap: 12px; }
   .btn {
     background: transparent; border: 1px solid var(--border); color: var(--muted);
     padding: 5px 12px; border-radius: var(--radius); font-family: var(--font);
-    font-size: 10px; cursor: pointer; transition: all 0.2s; letter-spacing: 0.02em;
+    font-size: 10px; cursor: pointer; letter-spacing: 0.02em;
     text-decoration: none;
   }
   .btn:hover { border-color: rgba(0,200,212,0.25); color: var(--teal); background: rgba(0,200,212,0.03); }
@@ -298,7 +268,7 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
   .btn-primary:hover { background: rgba(0,200,212,0.12); border-color: rgba(0,200,212,0.25); }
   .badge {
     background: rgba(0,200,212,0.06); border: 1px solid rgba(0,200,212,0.15);
-    color: var(--muted); font-size: 9px; padding: 2px 10px; border-radius: 12px;
+    color: var(--muted); font-size: 9px; padding: 2px 10px; border-radius: var(--radius);
     letter-spacing: 0.05em;
   }
   .layout { display: flex; height: calc(100vh - 52px); position: relative; z-index: 2; overflow: hidden; }
@@ -308,11 +278,11 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
   /* ── Terminal windows ── */
   .term-window {
     border: 1px solid var(--border); border-radius: var(--radius);
-    background: rgba(10,10,18,0.6); overflow: hidden;
+    background: #0a0a12; overflow: hidden;
   }
   .term-bar {
     padding: 6px 12px; border-bottom: 1px solid rgba(24,24,42,0.3);
-    background: rgba(0,0,0,0.25); user-select: none;
+    background: #000; user-select: none;
     display: flex; align-items: center; gap: 8px;
     font-size: 10px; color: var(--muted); font-family: var(--font);
   }
@@ -333,21 +303,21 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
   }
   .filter-group {
     display: flex; gap: 4px; align-items: center;
-    background: rgba(10,10,18,0.85);
+    background: #0a0a12;
     border: 1px solid var(--border); border-radius: var(--radius);
     padding: 4px 8px; font-size: 9px;
   }
   .filter-group label {
     display: flex; align-items: center; gap: 3px;
     cursor: pointer; color: var(--muted); font-size: 9px;
-    padding: 1px 4px; border-radius: 3px; transition: all 0.15s;
+    padding: 1px 4px; border-radius: var(--radius);
   }
   .filter-group label:hover { color: var(--text); background: var(--hover); }
   .filter-group input[type="checkbox"] { accent-color: var(--teal); width: 10px; height: 10px; }
   .filter-group input[type="text"] {
     background: var(--bg); border: 1px solid var(--border);
     color: var(--text); font-family: var(--font); font-size: 10px;
-    padding: 2px 6px; border-radius: 3px; width: 140px;
+    padding: 2px 6px; border-radius: var(--radius); width: 140px;
     outline: none;
   }
   .filter-group input[type="text"]:focus { border-color: rgba(0,200,212,0.25); }
@@ -362,23 +332,20 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
   /* ── Legend ── */
   .legend {
     position: absolute; top: 80px; right: 12px; z-index: 10;
-    background: rgba(10,10,18,0.85);
+    background: #0a0a12;
     border: 1px solid var(--border); border-radius: var(--radius);
     padding: 8px 10px; font-size: 9px;
   }
   .legend-title { color: var(--muted); font-size: 8px; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
   .legend-item { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; color: var(--text); }
-  .legend-shape { display: inline-block; width: 10px; height: 10px; border-radius: 2px; text-align: center; line-height: 10px; font-size: 7px; }
-  .legend-dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; vertical-align: middle; flex-shrink: 0; }
+  .legend-shape { display: inline-block; width: 10px; height: 10px; border-radius: var(--radius); text-align: center; line-height: 10px; font-size: 7px; }
+  .legend-dot { display: inline-block; width: 10px; height: 10px; border-radius: var(--radius); vertical-align: middle; flex-shrink: 0; }
 
   /* ── Side panel ── */
   .panel-lateral {
     width: 0; overflow: hidden;
-    background: rgba(10,10,18,0.92);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    background: #0a0a12;
     border-left: 1px solid var(--border);
-    transition: width 0.25s ease;
     display: flex; flex-direction: column;
   }
   .panel-lateral.abierto { width: 340px; min-width: 340px; }
@@ -391,14 +358,14 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
   .panel-header h3 { font-size: 12px; color: var(--teal-lt); font-weight: 500; letter-spacing: 0.02em; }
   .panel-close {
     background: none; border: none; color: var(--muted); font-size: 14px;
-    cursor: pointer; padding: 2px 6px; border-radius: 3px;
+    cursor: pointer; padding: 2px 6px; border-radius: var(--radius);
   }
   .panel-close:hover { background: var(--hover); color: var(--text); }
   .panel-body { flex: 1; overflow-y: auto; padding: 14px; font-size: 11px; }
   .panel-field { margin-bottom: 10px; }
   .panel-label { font-size: 8px; color: var(--teal); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 2px; }
   .panel-value { color: var(--text); font-size: 11px; word-break: break-all; }
-  .panel-estado { display: inline-flex; align-items: center; gap: 5px; padding: 2px 6px; border-radius: 3px; font-size: 10px; }
+  .panel-estado { display: inline-flex; align-items: center; gap: 5px; padding: 2px 6px; border-radius: var(--radius); font-size: 10px; }
   .panel-estado.up { background: rgba(34,197,94,0.12); color: var(--up); border: 1px solid rgba(34,197,94,0.2); }
   .panel-estado.warn { background: rgba(230,168,0,0.12); color: var(--warn); border: 1px solid rgba(230,168,0,0.2); }
   .panel-estado.degradado { background: rgba(217,121,23,0.12); color: var(--degradado); border: 1px solid rgba(217,121,23,0.2); }
@@ -406,25 +373,52 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
   .panel-estado.desconocido { background: rgba(112,120,136,0.08); color: var(--muted); border: 1px solid var(--border); }
   .type-tag {
     background: rgba(0,200,212,0.04); border: 1px solid rgba(0,200,212,0.08);
-    border-radius: 3px; padding: 1px 6px; font-size: 9px; color: var(--teal-lt);
+    border-radius: var(--radius); padding: 1px 6px; font-size: 9px; color: var(--teal-lt);
     display: inline-block;
   }
   .panel-barra-historial { display: flex; gap: 2px; flex-wrap: wrap; margin-top: 4px; }
-  .h-bar { width: 8px; height: 16px; border-radius: 1px; }
+  .h-bar { width: 8px; height: 16px; border-radius: var(--radius); }
   .panel-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
   .panel-actions .btn { font-size: 9px; padding: 3px 8px; }
   .no-select { color: var(--muted); font-style: italic; padding: 20px; text-align: center; font-size: 11px; }
   .count { color: var(--muted); font-size: 9px; }
-  #errorMsg { display:none; position:fixed; top:60px; left:50%; transform:translateX(-50%); z-index:999; background:#2a0f0f; border:1px solid #e84848; color:#e84848; padding:8px 16px; border-radius:6px; font-size:11px; max-width:80%; text-align:center; }
+  #errorMsg { display:none; position:fixed; top:60px; left:50%; transform:translateX(-50%); z-index:999; background:#2a0f0f; border:1px solid #e84848; color:#e84848; padding:8px 16px; border-radius:var(--radius); font-size:11px; max-width:80%; text-align:center; }
+
+  /* ── Actions dropdown ── */
+  .actions-wrapper { position: relative; display: inline-block; }
+  .actions-btn { cursor: pointer; padding: 2px 8px; font-size: 14px; line-height: 1; border: 1px solid transparent; border-radius: var(--radius); background: transparent; color: var(--muted); }
+  .actions-btn:hover, .actions-btn:focus { border-color: rgba(0,200,212,0.25); color: var(--teal); background: rgba(0,200,212,0.03); outline: none; }
+  .actions-dropdown { display: none; position: absolute; right: 0; top: 100%; z-index: 500; min-width: 170px; background: #0f0f18; border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 0; }
+  .actions-dropdown.open { display: block; }
+  .actions-dropdown a { display: flex; align-items: center; gap: 8px; padding: 6px 14px; color: var(--muted); text-decoration: none; font-size: 11px; font-family: var(--font); cursor: pointer; white-space: nowrap; }
+  .actions-dropdown a:hover { background: var(--hover); color: var(--text); }
+  .actions-dropdown a.danger { color: var(--down); }
+  .actions-dropdown a.danger:hover { background: rgba(232,72,72,0.08); }
+
+  /* ── Port badges ── */
+  .port-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(0,200,212,0.04); border: 1px solid rgba(0,200,212,0.1); border-radius: var(--radius); padding: 3px 12px; font-size: 11px; color: var(--text); cursor: default; }
+  .port-badge:hover { border-color: rgba(0,200,212,0.25); }
+  .port-badge .port-num { font-weight: 600; color: var(--teal-lt); }
+  .port-badge .port-proto { color: var(--muted); font-size: 9px; }
+  .port-badge .port-serv { color: var(--text); }
+  .port-badge .port-version { color: var(--muted); font-size: 9px; margin-left: auto; }
+  .port-badge.web { background: rgba(0,200,83,0.08); border-color: rgba(0,200,83,0.2); }
+  .port-badge.web a { color: var(--up); text-decoration: none; font-weight: 500; }
+  .port-badge.web a:hover { text-decoration: underline; }
 
 </style>
 </head>
 <body>
-  <canvas id="bgCanvas"></canvas>
   <header class="header">
-    <div class="logo">Vig<span>IA</span><span style="font-size:9px;color:var(--muted);margin-left:8px;letter-spacing:1px;font-weight:300;">// NETWORK MONITOR</span></div>
+    <div class="logo">
+      <canvas id="matrixCanvas"></canvas>
+      <span class="logo-click" onclick="location.reload()">
+        <span id="logoVig"></span><span id="logoIA"></span><span id="logoCursor">█</span>
+      </span>
+      <span class="logo-sub">// NETWORK MONITOR</span>
+    </div>
     <div class="header-right">
-      <button id="btnNavDashboard" class="btn btn-mapa" onclick="mostrarPanel('dashboard')" style="font-size:10px;padding:4px 12px;">📊 Dashboard</button>
+      <button id="btnNavDashboard" class="btn btn-mapa" onclick="mostrarPanel('dashboard')" style="font-size:10px;padding:4px 12px;"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2" style="vertical-align:middle;margin-bottom:2px;"><rect x="1" y="6" width="3" height="5" rx=".5"/><rect x="5" y="3" width="3" height="8" rx=".5"/><rect x="9" y="1" width="2" height="10" rx=".5"/></svg> Dashboard</button>
 <button id="btnNavMapa" class="btn" onclick="mostrarPanel('mapa')" style="font-size:10px;padding:4px 12px;">🗺 Mapa</button>
 <span class="badge" style="color:var(--green);border-color:rgba(0,204,119,0.15);">● SYS.ONLINE</span>
       <span class="badge" id="clienteBadge" style="max-width:140px;overflow:hidden;text-overflow:ellipsis;" data-cliente="">● <span id="clienteNombre">—</span></span>
@@ -452,19 +446,20 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
           <div class="stat-card alertas"><div class="stat-num" id="numAlertas">0</div><div class="stat-label">Alertas</div></div>
 
           <div class="stat-speed" id="speedBox">
-            <span style="color:var(--muted);font-size:10px;">🚀 Speedtest</span>
+            <span style="color:var(--muted);font-size:10px;">Speedtest</span>
             <span class="sep">|</span>
-            <span><span class="label">⬇</span> <span class="val" id="spDl">—</span></span>
-            <span><span class="label">⬆</span> <span class="val" id="spUl">—</span></span>
-            <span><span class="label">⏱</span> <span class="val" id="spPing">—</span></span>
+            <span><span class="label">↓</span> <span class="val" id="spDl">—</span></span>
+            <span><span class="label">↑</span> <span class="val" id="spUl">—</span></span>
+            <span><span class="label">●</span> <span class="val" id="spPing">—</span></span>
             <span class="sep">|</span>
             <span style="font-size:9px;color:var(--muted);" id="spServer">—</span>
             <span class="sep">|</span>
             <span style="font-size:9px;color:var(--muted);" id="spIP">—</span>
-            <button class="btn" onclick="mostrarIPPublica()" style="font-size:9px;padding:2px 7px;flex-shrink:0;">🌐 IP</button>
-            <span class="sep">|</span>
             <div class="bar-wrap"><div class="bar-fill" id="spBar"></div></div>
-            <button class="btn btn-speed" id="btnSpeedtest" onclick="speedtest()">🚀 Test</button>
+            <span class="sep">|</span>
+            <button class="btn btn-speed" id="btnSpeedtest" onclick="speedtest()">Test</button>
+            <span class="sep">|</span>
+            <button class="btn" onclick="mostrarIPPublica()" style="font-size:9px;padding:2px 7px;flex-shrink:0;">🌐 IP</button>
           </div>
 
         </div>
@@ -481,18 +476,18 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
         <div class="controles">
           <button class="btn" onclick="mostrarModalScan()">+ Scan</button>
           <button class="btn btn-primary" id="btnPoll" onclick="togglePoll()">▶ Monitor</button>
-          <select id="pollIntervalo" style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:4px;font-family:var(--font);font-size:10px;" onchange="cargarDatos()">
+          <select id="pollIntervalo" style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:var(--radius);font-family:var(--font);font-size:10px;" onchange="cargarDatos()">
             <option value="10">10s</option>
             <option value="20">20s</option>
             <option value="30" selected>30s</option>
           </select>
           <button class="btn" onclick="cargarDatos()">↻ Reload</button>
-          <select id="selectBusqueda" style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:4px;font-family:var(--font);font-size:10px;" onchange="if(this.value=='nuevos') buscarNuevos(); else if(this.value=='todas') buscarNuevosTodas(); this.value=''">
+          <select id="selectBusqueda" style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:var(--radius);font-family:var(--font);font-size:10px;" onchange="if(this.value=='nuevos') buscarNuevos(); else if(this.value=='todas') buscarNuevosTodas(); this.value=''">
             <option value="">🔍 Descubrir</option>
             <option value="nuevos">Buscar nuevos</option>
             <option value="todas">Todas las redes</option>
           </select>
-          <select id="selectReporte" style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:4px;font-family:var(--font);font-size:10px;" onchange="if(this.value) generarReporte(this.value); this.value=''">
+          <select id="selectReporte" style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:var(--radius);font-family:var(--font);font-size:10px;" onchange="if(this.value) generarReporte(this.value); this.value=''">
             <option value="">📄 Reportes</option>
             <option value="html">HTML</option>
             <option value="txt">TXT</option>
@@ -500,7 +495,7 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
           <button class="btn" onclick="reconciliarRed()">♻ Reconciliar</button>
           <button class="btn" onclick="agregarVendor()">➕ Vendor</button>
           <button class="btn" onclick="mostrarModalAgregarEquipo()">➕ Equipo</button>
-          <button class="btn" onclick="mostrarModalCleanPings()">🧹 Limpiar</button>
+          <button class="btn" onclick="mostrarModalCleanPings()">− Limpiar</button>
           <button class="btn" onclick="borrarRed()" style="color:var(--down);border-color:rgba(232,72,72,0.2);">✖ Borrar Red</button>
           <span class="contador" id="contador">—</span>
         </div>
@@ -508,7 +503,17 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
         <div class="table-wrap">
           <table class="table-dispositivos">
             <thead><tr>
-              <th>IP</th><th>Asignación</th><th>Alias</th><th>Hostname</th><th>MAC</th><th>Fabricante</th><th>Tipo</th><th>Estado</th><th>Latencia</th><th>Ultima vez</th><th></th>
+              <th data-col="ip" class="th-sortable">IP <span class="sort-arrow"></span><span class="resize-handle"></span></th>
+              <th data-col="asignacion" class="th-sortable">Asignación <span class="sort-arrow"></span><span class="resize-handle"></span></th>
+              <th data-col="alias" class="th-sortable">Alias <span class="sort-arrow"></span><span class="resize-handle"></span></th>
+              <th data-col="hostname" class="th-sortable">Hostname <span class="sort-arrow"></span><span class="resize-handle"></span></th>
+              <th data-col="mac" class="th-sortable">MAC <span class="sort-arrow"></span><span class="resize-handle"></span></th>
+              <th data-col="fabricante" class="th-sortable">Fabricante <span class="sort-arrow"></span><span class="resize-handle"></span></th>
+              <th data-col="tipo" class="th-sortable">Tipo <span class="sort-arrow"></span><span class="resize-handle"></span></th>
+              <th data-col="estado" class="th-sortable">Estado <span class="sort-arrow"></span><span class="resize-handle"></span></th>
+              <th data-col="latencia" class="th-sortable">Latencia <span class="sort-arrow"></span><span class="resize-handle"></span></th>
+              <th style="width:40px;"></th>
+              <th data-col="ultima_vez" class="th-sortable">Ultima vez <span class="sort-arrow"></span><span class="resize-handle"></span></th>
             </tr></thead>
             <tbody id="tablaBody"></tbody>
           </table>
@@ -517,7 +522,7 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
             <span id="pageInfo">Página 1 de 1</span>
             <button class="btn btn-sm" onclick="cambiarPagina('next')" id="btnNext" disabled>Siguiente ▶</button>
             <span style="margin-left:8px;">Mostrar</span>
-            <select id="selectPorPagina" style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:2px 4px;border-radius:4px;font-family:var(--font);font-size:11px;" onchange="cambiarPagina('reload')">
+            <select id="selectPorPagina" style="background:var(--surface);border:1px solid var(--border);color:var(--text);padding:2px 4px;border-radius:var(--radius);font-family:var(--font);font-size:11px;" onchange="cambiarPagina('reload')">
               <option value="20">20</option>
               <option value="50">50</option>
               <option value="100">100</option>
@@ -553,11 +558,11 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
             <span><span class="prompt-user">alejo_fix</span><span class="prompt-at">@</span><span class="prompt-host">vigia</span><span class="prompt-at">:</span><span class="prompt-path">~/chat</span><span class="prompt-sym">$</span></span>
           </div>
           <div class="term-body" style="padding:12px;">
-            <div id="chatBox" style="background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:4px;padding:12px;height:260px;overflow-y:auto;margin-bottom:8px;font-size:12px;line-height:1.6;">
+            <div id="chatBox" style="background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:var(--radius);padding:12px;height:260px;overflow-y:auto;margin-bottom:8px;font-size:12px;line-height:1.6;">
               <div style="color:var(--muted);font-style:italic;">Pregunta sobre el estado de la red...</div>
             </div>
             <div style="display:flex;gap:6px;">
-              <input id="chatInput" placeholder="ej: cuantas camaras estan caidas?" style="flex:1;background:rgba(0,0,0,0.4);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:4px;font-family:var(--font);font-size:11px;">
+              <input id="chatInput" placeholder="ej: cuantas camaras estan caidas?" style="flex:1;background:rgba(0,0,0,0.4);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:var(--radius);font-family:var(--font);font-size:11px;">
               <button class="btn btn-primary" onclick="enviarChat()" style="padding:6px 12px;">↵</button>
             </div>
           </div>
@@ -584,6 +589,7 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
         <label><input type="checkbox" class="filter-tipo" value="computadora" checked> ★ PC</label>
         <label><input type="checkbox" class="filter-tipo" value="camara" checked> ◇ Cam</label>
         <label><input type="checkbox" class="filter-tipo" value="impresora" checked> △ Impr</label>
+        <label><input type="checkbox" class="filter-tipo" value="switch" checked> ⇄ Switch</label>
         <label><input type="checkbox" class="filter-tipo" value="dispositivo" checked> ● Disp</label>
         <label><input type="checkbox" class="filter-tipo" value="desconocido" checked> ○ ?</label>
       </div>
@@ -593,6 +599,7 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
         <label><input type="checkbox" class="filter-estado" value="warn" checked style="accent-color:#e6a800"> Warn</label>
         <label><input type="checkbox" class="filter-estado" value="degradado" checked style="accent-color:#d97917"> Deg</label>
         <label><input type="checkbox" class="filter-estado" value="down" checked style="accent-color:#e84848"> Down</label>
+        <label><input type="checkbox" class="filter-estado" value="transparente" checked style="accent-color:#9ca3af"> Trans</label>
       </div>
       <div class="filter-group">
         <span class="filter-label">BUSCAR</span>
@@ -616,6 +623,7 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
         <div class="legend-item"><span style="width:10px;height:10px;border-radius:50%;display:inline-block;background:#e6a800;"></span> Latencia alta</div>
         <div class="legend-item"><span style="width:10px;height:10px;border-radius:50%;display:inline-block;background:#d97917;"></span> Degradado</div>
         <div class="legend-item"><span style="width:10px;height:10px;border-radius:50%;display:inline-block;background:#e84848;"></span> DOWN</div>
+        <div class="legend-item"><span style="width:10px;height:10px;border-radius:50%;display:inline-block;background:#9ca3af;"></span> Transparente</div>
       </div>
     </div>
 
@@ -632,7 +640,7 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
         <span class="count" id="contadorMapa" style="margin-left:4px;">—</span>
       </div>
     </div>
-  </div>
+    </div>
 
   <!-- Side panel -->
   <div class="panel-lateral" id="panelLateral">
@@ -700,9 +708,7 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
       <div class="panel-actions" id="panelActions"></div>
     </div>
   </div>
-</div>
-
-
+  </div>
 </div>
 
 <div class="modal-overlay" id="modalScan">
@@ -720,7 +726,7 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
   <div class="modal-overlay" id="modalAgregarEquipo">
     <div class="modal" style="width:460px;">
       <h3>➕ Agregar equipo manual</h3>
-      <p style="font-size:10px;color:var(--muted);margin-bottom:12px;">Para bridges transparentes o equipos que nmap no detecta automáticamente.</p>
+      <p style="font-size:10px;color:var(--muted);margin-bottom:12px;">Agrega un equipo a la red. Si es un bridge o no responde ping, marca "Transparente".</p>
       <label style="font-size:11px;color:var(--muted);">IP</label>
       <input id="inputEqIP" placeholder="192.168.1.200" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;margin-bottom:8px;">
       <label style="font-size:11px;color:var(--muted);">Alias</label>
@@ -740,6 +746,7 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
       <label style="font-size:11px;color:var(--muted);">Tipo</label>
       <select id="inputEqTipo" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;margin-bottom:8px;">
         <option value="router">Router</option>
+        <option value="switch">Switch</option>
         <option value="servidor">Servidor</option>
         <option value="computadora">Computadora</option>
         <option value="camara">Cámara</option>
@@ -747,7 +754,11 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
         <option value="dispositivo">Dispositivo</option>
       </select>
       <label style="font-size:11px;color:var(--muted);">Descripción</label>
-      <textarea id="inputEqDesc" placeholder="Bridge transparente - Red WiFi invitados" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;resize:vertical;margin-bottom:12px;"></textarea>
+      <textarea id="inputEqDesc" placeholder="Bridge transparente - Red WiFi invitados" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;resize:vertical;margin-bottom:8px;"></textarea>
+      <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);margin-bottom:12px;cursor:pointer;">
+        <input type="checkbox" id="inputEqTransparente" style="accent-color:#9ca3af;width:auto;">
+        Bridge / No responde ping (transparente)
+      </label>
       <div class="modal-btns">
         <button class="btn" onclick="cerrarModalAgregarEquipo()">Cancelar</button>
         <button class="btn btn-primary" onclick="guardarEquipo()">Guardar</button>
@@ -806,7 +817,7 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
   </div>
 
   <div class="modal-overlay" id="modalServicios">
-    <div class="modal wide">
+    <div class="modal" style="width:520px;">
       <h3 id="serviciosTitle">Servicios</h3>
       <div id="serviciosBody" style="max-height:400px;overflow-y:auto;font-size:12px;"></div>
       <div class="modal-btns" style="margin-top:12px;">
@@ -816,41 +827,53 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
   </div>
 
   <div class="modal-overlay" id="modalCredenciales">
-    <div class="modal" style="width:460px;">
+    <div class="modal" style="width:520px;">
       <h3 id="credencialesTitle">Credenciales</h3>
-      <div style="display:flex;flex-direction:column;gap:8px;">
-        <div id="serialGroupReadonly" style="display:none;flex-direction:column;gap:4px;">
-          <label style="font-size:11px;color:var(--muted);">Número de serie <span style="color:var(--teal);">autodetectado por SNMP</span></label>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <div id="serialGroupReadonly" style="display:none;flex-direction:column;gap:3px;">
+          <label style="font-size:10px;color:var(--muted);">Número de serie <span style="color:var(--teal);">autodetectado por SNMP</span></label>
           <div style="display:flex;gap:4px;">
-            <span id="spanSerial" style="flex:1;color:var(--text);padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:var(--font);"></span>
-            <button class="btn btn-sm" onclick="reDetectarSerial()" title="Re-intentar detección SNMP" style="font-size:12px;padding:4px 8px;white-space:nowrap;">🔄</button>
+            <span id="spanSerial" style="flex:1;color:var(--text);padding:6px 10px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);font-size:11px;font-family:var(--font);"></span>
+            <button class="btn btn-sm" onclick="reDetectarSerial()" title="Re-intentar detección SNMP" style="font-size:11px;padding:3px 6px;white-space:nowrap;">🔄</button>
           </div>
         </div>
-        <div id="serialGroupManual" style="display:none;flex-direction:column;gap:4px;">
-          <label style="font-size:11px;color:var(--muted);">Número de serie <span style="color:var(--warn);">no detectado</span></label>
+        <div id="serialGroupManual" style="display:none;flex-direction:column;gap:3px;">
+          <label style="font-size:10px;color:var(--muted);">Número de serie <span style="color:var(--warn);">no detectado</span></label>
           <div style="display:flex;gap:4px;">
-            <input id="inputSerial" type="text" placeholder="ingresar serial manualmente" style="flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
-            <button class="btn btn-sm" onclick="reDetectarSerial()" title="Intentar detección SNMP" style="font-size:12px;padding:4px 8px;white-space:nowrap;">🔄</button>
+            <input id="inputSerial" type="text" placeholder="ingresar serial manualmente" style="flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:var(--radius);font-family:var(--font);font-size:11px;">
+            <button class="btn btn-sm" onclick="reDetectarSerial()" title="Intentar detección SNMP" style="font-size:11px;padding:3px 6px;white-space:nowrap;">🔄</button>
           </div>
         </div>
-        <label style="font-size:11px;color:var(--muted);">Alias</label>
-        <input id="inputAlias" placeholder="alias del dispositivo" autocomplete="off" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
-        <label style="font-size:11px;color:var(--muted);">Contraseña de administración</label>
-        <div style="display:flex;gap:4px;">
-          <input id="inputAdminPass" type="text" placeholder="contraseña" autocomplete="off" style="flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
-          <button class="btn btn-sm" onclick="togglePassVis('inputAdminPass',this)" style="font-size:14px;padding:4px 8px;" title="Mostrar/Ocultar">👁️</button>
+        <div>
+          <label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px;">Alias</label>
+          <input id="inputAlias" placeholder="alias del dispositivo" autocomplete="off" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:var(--radius);font-family:var(--font);font-size:11px;">
         </div>
-        <label style="font-size:11px;color:var(--muted);">Usuario de app</label>
-        <input id="inputUsuario" placeholder="usuario de app" autocomplete="off" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
-        <label style="font-size:11px;color:var(--muted);">Contraseña de app</label>
-        <div style="display:flex;gap:4px;">
-          <input id="inputAppPass" type="text" placeholder="contraseña" autocomplete="off" style="flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
-          <button class="btn btn-sm" onclick="togglePassVis('inputAppPass',this)" style="font-size:14px;padding:4px 8px;" title="Mostrar/Ocultar">👁️</button>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+          <div>
+            <label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px;">Contraseña admin</label>
+            <div style="display:flex;gap:3px;">
+              <input id="inputAdminPass" type="text" placeholder="contraseña" autocomplete="off" style="flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:var(--radius);font-family:var(--font);font-size:11px;">
+              <button class="btn btn-sm" onclick="togglePassVis('inputAdminPass',this)" style="font-size:12px;padding:2px 6px;" title="Mostrar/Ocultar">👁️</button>
+            </div>
+          </div>
+          <div>
+            <label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px;">Usuario app</label>
+            <input id="inputUsuario" placeholder="usuario" autocomplete="off" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:var(--radius);font-family:var(--font);font-size:11px;">
+          </div>
         </div>
-        <label style="font-size:11px;color:var(--muted);">Observación</label>
-        <textarea id="inputObservacion" placeholder="notas" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;resize:vertical;"></textarea>
+        <div>
+          <label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px;">Contraseña app</label>
+          <div style="display:flex;gap:3px;">
+            <input id="inputAppPass" type="text" placeholder="contraseña" autocomplete="off" style="flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:var(--radius);font-family:var(--font);font-size:11px;">
+            <button class="btn btn-sm" onclick="togglePassVis('inputAppPass',this)" style="font-size:12px;padding:2px 6px;" title="Mostrar/Ocultar">👁️</button>
+          </div>
+        </div>
+        <div>
+          <label style="font-size:10px;color:var(--muted);display:block;margin-bottom:3px;">Observación</label>
+          <textarea id="inputObservacion" placeholder="notas" rows="2" style="width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:var(--radius);font-family:var(--font);font-size:11px;resize:vertical;"></textarea>
+        </div>
       </div>
-      <div class="modal-btns" style="margin-top:14px;">
+      <div class="modal-btns" style="margin-top:12px;">
         <button class="btn" onclick="cerrarModalCredenciales()">Cancelar</button>
         <button class="btn btn-primary" onclick="guardarCredenciales()">Guardar</button>
       </div>
@@ -860,12 +883,12 @@ document.write('<link href="' + _sb + '/vendor/vis-network.min.css" rel="stylesh
   <div class="modal-overlay" id="modalComentarios">
     <div class="modal" style="width:460px;">
       <h3 id="comentariosTitle">💬 Comentarios</h3>
-      <div id="comentariosList" style="max-height:300px;overflow-y:auto;margin-bottom:12px;font-size:11px;"></div>
+      <div id="comentariosList" style="max-height:300px;overflow-y:auto;margin-bottom:10px;font-size:11px;"></div>
       <div style="display:flex;gap:4px;">
-        <input id="inputComentario" placeholder="Agregar comentario..." style="flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius);font-family:var(--font);font-size:12px;">
-        <button class="btn btn-primary" onclick="agregarComentario()" style="font-size:12px;padding:4px 12px;">➕</button>
+        <input id="inputComentario" placeholder="Agregar comentario..." style="flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:var(--radius);font-family:var(--font);font-size:11px;">
+        <button class="btn btn-primary" onclick="agregarComentario()" style="font-size:11px;padding:3px 10px;">➕</button>
       </div>
-      <div class="modal-btns" style="margin-top:12px;">
+      <div class="modal-btns" style="margin-top:10px;">
         <button class="btn" onclick="cerrarModalComentarios()">Cerrar</button>
       </div>
     </div>
@@ -951,7 +974,7 @@ let pollActivo = false;
 // === CONFIGURACIÓN ===
 // MODO_XAMPP = true:  frontend servido por Apache (XAMPP), backend Python en PUERTO_BACKEND
 // MODO_XAMPP = false: backend Python sirve todo (puerto 8080)
-var MODO_XAMPP = false;
+var MODO_XAMPP = true;
 var PUERTO_BACKEND = 8080;
 // =====================
 
@@ -974,6 +997,19 @@ function escapeAttr(s) {
   if (!s) return '';
   return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
+
+// ── Actions dropdown ──
+function toggleActions(btn) {
+  const dd = btn.parentElement.querySelector('.actions-dropdown');
+  const wasOpen = dd.classList.contains('open');
+  document.querySelectorAll('.actions-dropdown.open').forEach(d => d.classList.remove('open'));
+  if (!wasOpen) dd.classList.add('open');
+}
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.actions-wrapper')) {
+    document.querySelectorAll('.actions-dropdown.open').forEach(d => d.classList.remove('open'));
+  }
+});
 
 async function apiFetch(url, opts = {}) {
   const { headers: optsHeaders, sinCliente: _sc, timeout, ...fetchOpts } = opts;
@@ -1068,17 +1104,106 @@ async function cargarStats() {
 let _datosDispositivos = [];
 let _paginaActual = 1;
 let _porPagina = 20;
+let _sortCol = '';
+let _sortDir = 'asc';
+
+// ── Table sorting ──
+function _sortData(data) {
+  if (!_sortCol) return data;
+  const col = _sortCol;
+  const dir = _sortDir === 'asc' ? 1 : -1;
+  return [...data].sort((a, b) => {
+    let va = a[col], vb = b[col];
+    if (col === 'latencia') {
+      va = va ?? -1;
+      vb = vb ?? -1;
+    } else if (col === 'ultima_vez') {
+      va = va ? new Date(va).getTime() : 0;
+      vb = vb ? new Date(vb).getTime() : 0;
+    } else {
+      va = (va || '').toString().toLowerCase();
+      vb = (vb || '').toString().toLowerCase();
+    }
+    if (va < vb) return -1 * dir;
+    if (va > vb) return 1 * dir;
+    return 0;
+  });
+}
+
+function ordenarPor(col) {
+  if (_sortCol === col) {
+    _sortDir = _sortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    _sortCol = col;
+    _sortDir = 'asc';
+  }
+  document.querySelectorAll('.th-sortable .sort-arrow').forEach(el => {
+    el.textContent = '';
+    el.classList.remove('active');
+  });
+  const th = document.querySelector(`th[data-col="${col}"]`);
+  if (th) {
+    const arrow = th.querySelector('.sort-arrow');
+    if (arrow) {
+      arrow.textContent = _sortDir === 'asc' ? '▲' : '▼';
+      arrow.classList.add('active');
+    }
+  }
+  _paginaActual = 1;
+  _renderizarPagina();
+}
+
+// ── Column resize ──
+function _initResize() {
+  document.querySelectorAll('.resize-handle').forEach(handle => {
+    handle.addEventListener('mousedown', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const th = this.parentElement;
+      const table = th.closest('table');
+      const startX = e.clientX;
+      const startW = th.offsetWidth;
+      const tblW = table.offsetWidth;
+      this.classList.add('dragging');
+
+      function onMove(ev) {
+        const diff = ev.clientX - startX;
+        const newW = Math.max(30, startW + diff);
+        th.style.width = newW + 'px';
+      }
+      function onUp() {
+        handle.classList.remove('dragging');
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  });
+}
+
+// ── Sort click handlers ──
+function _initSort() {
+  document.querySelectorAll('.th-sortable').forEach(th => {
+    th.addEventListener('click', function(e) {
+      if (e.target.closest('.resize-handle')) return;
+      const col = this.dataset.col;
+      if (col) ordenarPor(col);
+    });
+  });
+}
 
 function _renderizarPagina() {
   const tbody = document.getElementById('tablaBody');
-  const total = _datosDispositivos.length;
+  const datos = _sortData(_datosDispositivos);
+  const total = datos.length;
   const porPagina = _porPagina === 0 ? total : _porPagina;
   const totalPaginas = porPagina > 0 ? Math.max(1, Math.ceil(total / porPagina)) : 1;
   if (_paginaActual > totalPaginas) _paginaActual = totalPaginas;
 
   const inicio = (_paginaActual - 1) * porPagina;
   const fin = _porPagina === 0 ? total : Math.min(inicio + _porPagina, total);
-  const pagina = _datosDispositivos.slice(inicio, fin);
+  const pagina = datos.slice(inicio, fin);
 
   tbody.innerHTML = '';
 
@@ -1091,7 +1216,8 @@ function _renderizarPagina() {
 
     let dotClass = 'dot-unknown';
     let estadoTexto = estado;
-    if (estado === 'up') { dotClass = 'dot-up'; estadoTexto = 'activo'; }
+    if (estado === 'transparente') { dotClass = 'dot-transparente'; estadoTexto = 'transparente'; }
+    else if (estado === 'up') { dotClass = 'dot-up'; estadoTexto = 'activo'; }
     else if (estado === 'degradado') { dotClass = 'dot-degradado'; estadoTexto = 'degradado'; }
     else if (estado === 'down') { dotClass = 'dot-down'; estadoTexto = 'caido'; }
     else if (estado === 'warn') { dotClass = 'dot-warn'; estadoTexto = 'latencia alta'; }
@@ -1103,7 +1229,7 @@ function _renderizarPagina() {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td style="color:${ipColor};font-weight:600;">${d.ip}</td>
-      <td><select class="asig-select" data-id="${d.id}" style="font-size:11px;padding:2px 2px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text);width:100%;min-width:80px;">
+      <td><select class="asig-select" data-id="${d.id}" style="font-size:11px;padding:2px 2px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text);width:100%;min-width:80px;">
         <option value="desconocido" ${asig==='desconocido'?'selected':''}>—</option>
         <option value="dhcp" ${asig==='dhcp'?'selected':''}>DHCP</option>
         <option value="reservada" ${asig==='reservada'?'selected':''}>Reservada</option>
@@ -1132,8 +1258,13 @@ function _renderizarPagina() {
       <td><span class="tipo-tag" style="${(()=>{const c={router:'#00c8d4',servidor:'#4ad8e6',computadora:'#d0d4e0',camara:'#22C55E',impresora:'#cc8800',dispositivo:'#707888'}[d.tipo];return c?'color:'+c+';border-color:'+c+'44':'color:var(--teal-lt)'})()}}">${d.tipo || 'desconocido'}</span></td>
       <td><span class="status-dot ${dotClass}"></span>${estadoTexto}</td>
       <td>${latStr}</td>
+      <td><div class="actions-wrapper"><button class="actions-btn" onclick="event.stopPropagation();toggleActions(this)">⚙</button><div class="actions-dropdown">
+<a onclick="event.stopPropagation();eliminarDispositivo(${d.id}, '${escapeAttr(d.ip)}')">🗑️ Eliminar</a>
+<a onclick="event.stopPropagation();verServicios(${d.id}, '${escapeAttr(d.ip)}')">🔍 Puertos</a>
+<a onclick="event.stopPropagation();verCredenciales(${d.id}, '${escapeAttr(d.ip)}')">🔑 Credenciales</a>
+<a onclick="event.stopPropagation();verComentarios(${d.id}, '${escapeAttr(d.ip)}')">💬 Notas</a>
+</div></div></td>
       <td>${ultima}</td>
-      <td><button class="btn btn-sm" onclick="eliminarDispositivo(${d.id}, '${escapeAttr(d.ip)}')">🗑️</button> <button class="btn btn-sm" onclick="verServicios(${d.id}, '${escapeAttr(d.ip)}')">🔍</button> <button class="btn btn-sm" onclick="verCredenciales(${d.id}, '${escapeAttr(d.ip)}')">🔑</button> <button class="btn btn-sm" onclick="verComentarios(${d.id}, '${escapeAttr(d.ip)}')">💬</button></td>
     `;
     const sel = tr.querySelector('.asig-select');
     sel.addEventListener('change', async function() {
@@ -1255,7 +1386,7 @@ function _limpiarUI() {
   document.getElementById('numDegradados').textContent = '0';
   document.getElementById('numDown').textContent = '0';
   document.getElementById('numAlertas').textContent = '0';
-  document.getElementById('tablaBody').innerHTML = '<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--muted);">Seleccioná o creá una red para comenzar<br><br><button class="btn btn-primary" onclick="mostrarModalScan()" style="font-size:13px;padding:8px 24px;">📡 Crear red / Escanear</button></td></tr>';
+  document.getElementById('tablaBody').innerHTML = '';
   document.getElementById('alertasBody').innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--muted);">Sin alertas pendientes</td></tr>';
   document.getElementById('contadorHosts').textContent = '0 hosts';
   document.getElementById('statusMsg').textContent = '';
@@ -1289,8 +1420,8 @@ async function generarReporte(formato) {
     const res = await apiFetch('/api/reporte?formato=' + formato, {
       method: 'POST',
     });
-    const rutaRelativa = res.ruta.replace(/^reportes\//, '');
-    mostrarToastConLink(`✅ Reporte ${formato.toUpperCase()} listo`, `/${res.ruta}`, formato);
+    window.open('/' + res.ruta, '_blank');
+    toast(`✅ Reporte ${formato.toUpperCase()} abierto`);
   } catch (e) {
     toast('Error: ' + e.message);
   }
@@ -1565,7 +1696,7 @@ async function cargarSegmentos() {
     }
     res.segmentos.forEach(function(s) {
       const row = document.createElement('div');
-      row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:4px 6px;background:var(--bg);border:1px solid var(--border);border-radius:3px;margin-bottom:4px;font-size:10px;';
+      row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:4px 6px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:4px;font-size:10px;';
       row.innerHTML = '<span><strong style="color:var(--teal-lt);">' + s.rango + '</strong> <span style="color:var(--muted);">' + (s.descripcion || '') + '</span></span>' +
         '<button class="btn btn-sm" onclick="eliminarSegmento(' + cid + ',' + s.id + ')" style="color:var(--down);padding:1px 6px;">✕</button>';
       listEl.appendChild(row);
@@ -1633,6 +1764,7 @@ async function ejecutarAgregarEquipo(clave) {
     tipo: document.getElementById('inputEqTipo').value,
     descripcion: document.getElementById('inputEqDesc').value.trim() || null,
     tipo_asignacion_ip: 'estatica',
+    transparente: document.getElementById('inputEqTransparente').checked ? 1 : 0,
   };
   try {
     const res = await apiFetch('/api/dispositivos', {
@@ -1711,35 +1843,23 @@ async function verServicios(id, ip) {
       html = '<div style="color:var(--muted);padding:16px;text-align:center;font-size:12px;">Sin puertos abiertos detectados.<br><br><button class="btn btn-primary" onclick="escanearPuertosAhora()" style="font-size:11px;padding:6px 16px;">🔍 Escanear puertos</button></div>';
     } else {
       html = `<div style="display:flex;gap:6px;margin-bottom:10px;font-size:10px;flex-wrap:wrap;">`;
-      html += `<span style="background:rgba(0,200,83,0.1);color:var(--up);padding:2px 8px;border-radius:10px;border:1px solid rgba(0,200,83,0.2);">▲ ${abiertos.length} abiertos</span>`;
+      html += `<span style="background:rgba(0,200,83,0.1);color:var(--up);padding:2px 8px;border-radius:var(--radius);border:1px solid rgba(0,200,83,0.2);">▲ ${abiertos.length} abiertos</span>`;
       if (webPorts.length > 0) {
-        html += `<span style="background:rgba(0,200,212,0.1);color:var(--teal);padding:2px 8px;border-radius:10px;border:1px solid rgba(0,200,212,0.2);">🌐 ${webPorts.length} web</span>`;
+        html += `<span style="background:rgba(0,200,212,0.1);color:var(--teal);padding:2px 8px;border-radius:var(--radius);border:1px solid rgba(0,200,212,0.2);">🌐 ${webPorts.length} web</span>`;
       }
       html += `</div>`;
-      if (webPorts.length > 0) {
-        html += '<div style="margin-bottom:10px;display:flex;gap:6px;flex-wrap:wrap;">';
-        for (const w of webPorts) {
-          const proto = w.puerto === 443 || w.puerto === 8443 ? 'https' : 'http';
-          html += `<a href="${proto}://${ip}:${w.puerto}" target="_blank" style="background:var(--accent, #0EA5A0);color:#fff;padding:4px 10px;border-radius:var(--radius);text-decoration:none;font-size:11px;">🌐 ${proto.toUpperCase()} :${w.puerto}</a>`;
-        }
-        html += '</div>';
-      }
-      html += '<table style="width:100%;border-collapse:collapse;"><thead><tr style="background:var(--bg);">';
-      html += '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);">Puerto</th>';
-      html += '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);">Protocolo</th>';
-      html += '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);">Servicio</th>';
-      html += '<th style="padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);">Versión</th></tr></thead><tbody>';
+      html += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
       for (const s of abiertos) {
         const isWeb = s.puerto === 80 || s.puerto === 443 || s.puerto === 8080 || s.puerto === 8443;
-        const bg = isWeb ? 'background:rgba(0,200,83,0.06);' : '';
-        html += `<tr style="${bg}">`;
-        html += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);font-weight:600;">${s.puerto}</td>`;
-        html += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);">${s.protocolo || '—'}</td>`;
-        html += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);">${s.servicio || '—'}${isWeb ? ' 🌐' : ''}</td>`;
-        html += `<td style="padding:5px 8px;border-bottom:1px solid var(--border);color:var(--muted);font-size:10px;">${s.version || '—'}</td>`;
-        html += '</tr>';
+        if (isWeb) {
+          const proto = s.puerto === 443 || s.puerto === 8443 ? 'https' : 'http';
+          html += `<span class="port-badge web"><a href="${proto}://${ip}:${s.puerto}" target="_blank">🌐 ${s.puerto}</a><span class="port-serv">${s.servicio || ''}</span></span>`;
+        } else {
+          const versionInfo = s.version ? `<span class="port-version">${s.version}</span>` : '';
+          html += `<span class="port-badge"><span class="port-num">${s.puerto}</span><span class="port-proto">/${s.protocolo || '—'}</span><span class="port-serv">${s.servicio || '—'}</span>${versionInfo}</span>`;
+        }
       }
-      html += '</tbody></table>';
+      html += '</div>';
     }
     document.getElementById('serviciosBody').innerHTML = html;
     document.getElementById('modalServicios').classList.add('active');
@@ -1881,10 +2001,10 @@ async function cargarComentarios() {
     }
     listEl.innerHTML = res.map(function(c) {
       const fecha = c.created_at ? new Date(c.created_at).toLocaleString() : '';
-      return '<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 6px;border-bottom:1px solid var(--border);">' +
-        '<div style="flex:1;"><div style="color:var(--text);font-size:12px;">' + escapeHtml(c.contenido) + '</div>' +
-        '<div style="color:var(--muted);font-size:10px;margin-top:2px;">' + fecha + '</div></div>' +
-        '<button class="btn btn-sm" onclick="eliminarComentario(' + c.id + ')" style="color:var(--down);padding:1px 6px;font-size:11px;">✕</button>' +
+      return '<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:5px 6px;border-bottom:1px solid var(--border);gap:6px;">' +
+        '<div style="flex:1;min-width:0;"><div style="color:var(--text);font-size:11px;word-break:break-word;">' + escapeHtml(c.contenido) + '</div>' +
+        '<div style="color:var(--muted);font-size:9px;margin-top:1px;">' + fecha + '</div></div>' +
+        '<button class="btn btn-sm" onclick="eliminarComentario(' + c.id + ')" style="color:var(--down);padding:0 4px;font-size:10px;flex-shrink:0;">✕</button>' +
         '</div>';
     }).join('');
   } catch (e) {
@@ -1983,7 +2103,7 @@ async function speedtest() {
   const btn = document.getElementById('btnSpeedtest');
   const box = document.getElementById('speedBox');
   btn.disabled = true;
-  btn.textContent = '⌛';
+  btn.textContent = '⟳';
   document.getElementById('spDl').textContent = '...';
   document.getElementById('spUl').textContent = '...';
   document.getElementById('spPing').textContent = '...';
@@ -2009,7 +2129,7 @@ async function speedtest() {
           document.getElementById('spPing').textContent = res.ping_ms + ' ms';
           document.getElementById('spServer').textContent = res.servidor;
           document.getElementById('spIP').textContent = res.ip_publica;
-          btn.textContent = '🚀 Test';
+          btn.textContent = 'Test';
           btn.disabled = false;
           setTimeout(() => { document.getElementById('spBar').style.width = '0%'; }, 2000);
         } else if (res.estado === 'error') {
@@ -2017,15 +2137,15 @@ async function speedtest() {
           clearInterval(anim);
           document.getElementById('spServer').textContent = 'Error: ' + (res.error || 'desconocido');
           document.getElementById('spBar').style.width = '0%';
-          btn.textContent = '🚀 Test';
+          btn.textContent = 'Test';
           btn.disabled = false;
         }
-      } catch (_) { clearInterval(poll); clearInterval(anim); btn.textContent = '🚀 Test'; btn.disabled = false; }
+      } catch (_) { clearInterval(poll); clearInterval(anim); btn.textContent = 'Test'; btn.disabled = false; }
     }, 2000);
   } catch (e) {
     clearInterval(anim);
     document.getElementById('spServer').textContent = 'Error: ' + e.message;
-    btn.textContent = '🚀 Test';
+    btn.textContent = 'Test';
     btn.disabled = false;
   }
 }
@@ -2248,6 +2368,7 @@ document.querySelectorAll('.filter-bar input[type="checkbox"]').forEach(function
 // ── Shape / color mapping ──
 var TIPO_CONFIG = {
   router:      { shape: 'hexagon', color: '#00c8d4', label: 'Router' },
+  switch:      { shape: 'hexagon', color: '#14b8a6', label: 'Switch' },
   servidor:    { shape: 'square',  color: '#38bdf8', label: 'Servidor' },
   computadora: { shape: 'star',    color: '#94a3b8', label: 'PC' },
   camara:      { shape: 'diamond', color: '#22C55E', label: 'Cámara' },
@@ -2261,6 +2382,11 @@ var SVG_PATH = {
   router:
     '<rect x="11" y="23" width="18" height="11" rx="2" fill="none" stroke="#fff" stroke-width="1.5"/>' +
     '<path d="M14 23v-4l3 1.5M20 23v-6l3 1.5M26 23v-4l3 1.5" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>',
+  switch:
+    '<rect x="10" y="14" width="20" height="12" rx="2" fill="none" stroke="#fff" stroke-width="1.5"/>' +
+    '<circle cx="14" cy="20" r="1.5" fill="#fff" opacity=".5"/>' +
+    '<circle cx="20" cy="20" r="1.5" fill="#fff" opacity=".5"/>' +
+    '<circle cx="26" cy="20" r="1.5" fill="#fff" opacity=".5"/>',
   servidor:
     '<rect x="10" y="10" width="20" height="6" rx="1" fill="#fff" opacity=".85"/>' +
     '<rect x="10" y="17" width="20" height="6" rx="1" fill="#fff" opacity=".65"/>' +
@@ -2304,6 +2430,7 @@ var ESTADO_BORDE = {
   warn:       '#e6a800',
   degradado:  '#d97917',
   down:       '#e84848',
+  transparente: '#9ca3af',
 };
 
 var ESTADO_LABEL = {
@@ -2311,6 +2438,7 @@ var ESTADO_LABEL = {
   warn: 'Latencia alta',
   degradado: 'Degradado',
   down: 'DOWN',
+  transparente: 'Transparente',
 };
 
 
@@ -2332,6 +2460,7 @@ function borderFromEstado(estado) {
 function sizeFromTipo(tipo) {
   switch (tipo) {
     case 'router': return 40;
+    case 'switch': return 34;
     case 'servidor': return 32;
     case 'computadora': return 26;
     case 'camara': return 28;
@@ -2480,7 +2609,7 @@ function aplicarFiltros() {
     var tipo = n.tipo || 'desconocido';
     var estado = n.estado || 'desconocido';
     if (!currentFilter.tipos[tipo]) return;
-    if (!currentFilter.estados[estado]) return;
+    if (estado !== 'desconocido' && !currentFilter.estados[estado]) return;
     if (currentFilter.search) {
       var haystack = (n.ip + ' ' + (n.hostname || '') + ' ' + (n.alias || '')).toLowerCase();
       if (haystack.indexOf(currentFilter.search) === -1) return;
@@ -2634,7 +2763,7 @@ function mostrarPing(nodeId) {
   if (!statusEl) {
     statusEl = document.createElement('div');
     statusEl.id = 'pPingStatus';
-    statusEl.style.cssText = 'margin-top:12px;padding:8px 10px;border:1px solid var(--border);border-radius:4px;font-size:10px;background:rgba(0,0,0,0.2);';
+    statusEl.style.cssText = 'margin-top:12px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:10px;background:rgba(0,0,0,0.2);';
     document.getElementById('panelBody').appendChild(statusEl);
   }
   statusEl.innerHTML = '⏳ Pinging <strong>' + nodo.ip + '</strong>...';
@@ -2731,6 +2860,42 @@ function togglePollMapa() {
   }
 }
 
+// ── Matrix Rain ──
+(function(){
+  var c = document.getElementById('matrixCanvas');
+  if (!c) return;
+  var ctx = c.getContext('2d'), W = 280, H = 52;
+  c.width = W; c.height = H;
+  var chars = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789ABCDEF';
+  var cols = Math.floor(W / 10), drops = [];
+  for (var i = 0; i < cols; i++) drops[i] = Math.floor(Math.random() * -20);
+  function draw() {
+    ctx.fillStyle = 'rgba(10,10,15,0.08)';
+    ctx.fillRect(0, 0, W, H);
+    for (var i = 0; i < cols; i++) {
+      var ch = chars[Math.floor(Math.random() * chars.length)];
+      ctx.fillStyle = '#00cc77';
+      ctx.font = '9px monospace';
+      ctx.fillText(ch, i * 10, drops[i] * 10);
+      if (drops[i] * 10 > H && Math.random() > 0.975) drops[i] = 0;
+      drops[i]++;
+    }
+  }
+  setInterval(draw, 70);
+})();
+
+// ── Typing Animation ──
+(function(){
+  var vig = document.getElementById('logoVig'), ia = document.getElementById('logoIA'), cur = document.getElementById('logoCursor');
+  if (!vig || !ia || !cur) return;
+  var text = 'Vig', i = 0;
+  function typeVig() {
+    if (i < text.length) { vig.textContent += text[i]; i++; setTimeout(typeVig, 120); }
+    else { var j = 0; var txt2 = 'IA'; function typeIA() { if (j < txt2.length) { ia.textContent += txt2[j]; j++; setTimeout(typeIA, 120); } else { cur.style.display = 'inline'; } } typeIA(); }
+  }
+  typeVig();
+})();
+
 // ── Speedtest ──
 
 
@@ -2741,8 +2906,8 @@ function togglePollMapa() {
 
 
 
-
-
+_initSort();
+_initResize();
 cargarDatos(true);
 </script>
 </body>

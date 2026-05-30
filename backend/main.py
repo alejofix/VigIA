@@ -17,7 +17,7 @@ import speedtest as st_lib
 import uuid
 
 from backend.database import init_db, get_session, get_or_create_cliente
-from backend.models import Cliente, Dispositivo, Ping, Alerta, Servicio, PosicionTopologia, Credencial, MacVendorExact, SegmentoExtra, ComentarioDispositivo
+from backend.models import Cliente, Dispositivo, Ping, Alerta, Servicio, PosicionTopologia, Credencial, MacVendorExact, OuiVendor, PortHeuristic, SegmentoExtra, ComentarioDispositivo
 from backend.schemas import (
     DispositivoCreate, DispositivoOut, DispositivoConEstado,
     PingOut, ServicioOut, AlertaOut,
@@ -28,7 +28,7 @@ from backend.schemas import (
 )
 from concurrent.futures import ThreadPoolExecutor
 import agente.nmap_scanner as nmap_scanner
-from agente.nmap_scanner import reconciliar_dispositivos, descubrir_nuevos, _SNMP_DISPONIBLE, _normalizar_mac
+from agente.nmap_scanner import reconciliar_dispositivos, descubrir_nuevos, _SNMP_DISPONIBLE, _normalizar_mac, _oui_de_mac
 from agente.icmp_poller import ciclo_polling
 from agente.snmp_reader import obtener_info_dispositivo
 from exportar.generar_reporte import generar as generar_reporte
@@ -118,6 +118,7 @@ async def mapa():
 async def listar_dispositivos(
     nombre_cliente: str = Query("red_cliente"),
     activo: int | None = None,
+    transparente: int | None = None,
     tipo: str | None = None,
     segmento: str | None = None,
 ):
@@ -127,6 +128,8 @@ async def listar_dispositivos(
         q = session.query(Dispositivo).filter_by(cliente_id=cid)
         if activo is not None:
             q = q.filter_by(activo=activo)
+        if transparente is not None:
+            q = q.filter_by(transparente=transparente)
         if tipo:
             q = q.filter_by(tipo=tipo)
         if segmento:
@@ -184,12 +187,17 @@ async def listar_dispositivos_con_estado(nombre_cliente: str = Query("red_client
                 primera_vez=d.primera_vez,
                 ultima_vez=d.ultima_vez,
                 activo=d.activo,
+                transparente=d.transparente,
                 segmento=d.segmento,
                 serial=d.serial,
-                estado=ping_map[d.id].estado if d.id in ping_map else "desconocido",
+                estado="transparente" if d.transparente else (ping_map[d.id].estado if d.id in ping_map else "desconocido"),
                 latencia_ms=ping_map[d.id].latencia_ms if d.id in ping_map else None,
                 alias=cred_map.get(d.id),
                 tipo_asignacion_ip=d.tipo_asignacion_ip or "desconocido",
+                vendor_method=d.vendor_method,
+                vendor_confidence=d.vendor_confidence,
+                hostname_method=d.hostname_method,
+                hostname_confidence=d.hostname_confidence,
             )
             for d in dispositivos
         ]
@@ -299,6 +307,29 @@ async def actualizar_asignacion_ip(
         d.tipo_asignacion_ip = data.tipo_asignacion_ip
         session.commit()
         return {"ok": True}
+    finally:
+        session.close()
+
+
+@app.patch("/api/dispositivos/{dispositivo_id}/transparente")
+async def toggle_transparente(
+    dispositivo_id: int,
+    body: dict,
+    nombre_cliente: str = Query("red_cliente"),
+):
+    session = get_session()
+    try:
+        cid = get_or_create_cliente(session, nombre_cliente)
+        d = (
+            session.query(Dispositivo)
+            .filter_by(id=dispositivo_id, cliente_id=cid)
+            .first()
+        )
+        if not d:
+            raise HTTPException(404, "Dispositivo no encontrado")
+        d.transparente = body.get("transparente", 0)
+        session.commit()
+        return {"ok": True, "transparente": d.transparente}
     finally:
         session.close()
 
@@ -687,7 +718,7 @@ async def stats(nombre_cliente: str = Query("red_cliente")):
     try:
         cid = get_or_create_cliente(session, nombre_cliente)
         total = session.query(func.count(Dispositivo.id)).filter_by(cliente_id=cid).scalar() or 0
-        activos = session.query(func.count(Dispositivo.id)).filter_by(cliente_id=cid, activo=1).scalar() or 0
+        activos = session.query(func.count(Dispositivo.id)).filter_by(cliente_id=cid, activo=1, transparente=0).scalar() or 0
         total_pings = session.query(func.count(Ping.id)).filter_by(cliente_id=cid).scalar() or 0
         alerta_row = session.query(
             func.count(Alerta.id).label("pendientes"),
@@ -895,8 +926,40 @@ async def agregar_mac_vendor(
         else:
             session.add(MacVendorExact(mac=mac, vendor=vendor, confidence=confidence))
             creado = True
+        dispositivos = session.query(Dispositivo).filter_by(mac=mac).all()
+        for d in dispositivos:
+            d.fabricante = vendor
+            d.vendor_method = "mac_exact"
+            d.vendor_confidence = confidence
+
+        oui = _oui_de_mac(mac)
+        if oui:
+            oui_existente = session.query(OuiVendor).filter_by(oui=oui, source="custom").first()
+            if oui_existente:
+                oui_existente.vendor = vendor
+                oui_existente.confidence = confidence
+            else:
+                session.add(OuiVendor(oui=oui, vendor=vendor, source="custom", confidence=confidence))
+
+        disp_ids = [d.id for d in dispositivos]
+        if disp_ids:
+            servicios = session.query(Servicio).filter(
+                Servicio.dispositivo_id.in_(disp_ids),
+                Servicio.estado == "abierto"
+            ).all()
+            for s in servicios:
+                puerto = s.puerto
+                proto = s.protocolo or "tcp"
+                port_existente = session.query(PortHeuristic).filter_by(puerto=puerto, protocolo=proto).first()
+                if port_existente:
+                    if confidence > (port_existente.confidence or 0):
+                        port_existente.vendor = vendor
+                        port_existente.confidence = confidence
+                else:
+                    session.add(PortHeuristic(puerto=puerto, protocolo=proto, vendor=vendor, confidence=confidence))
+
         session.commit()
-        return {"ok": True, "creado": creado, "mac": mac, "vendor": vendor}
+        return {"ok": True, "creado": creado, "mac": mac, "vendor": vendor, "dispositivos_actualizados": len(dispositivos)}
     except HTTPException:
         raise
     except Exception as e:
@@ -934,6 +997,37 @@ async def importar_mac_vendor(
             else:
                 session.add(MacVendorExact(mac=mac, vendor=vendor, confidence=confidence))
                 insertados += 1
+            dispositivos = session.query(Dispositivo).filter_by(mac=mac).all()
+            for d in dispositivos:
+                d.fabricante = vendor
+                d.vendor_method = "mac_exact"
+                d.vendor_confidence = confidence
+
+            oui = _oui_de_mac(mac)
+            if oui:
+                oui_existente = session.query(OuiVendor).filter_by(oui=oui, source="custom").first()
+                if oui_existente:
+                    oui_existente.vendor = vendor
+                    oui_existente.confidence = confidence
+                else:
+                    session.add(OuiVendor(oui=oui, vendor=vendor, source="custom", confidence=confidence))
+
+            disp_ids = [d.id for d in dispositivos]
+            if disp_ids:
+                servicios = session.query(Servicio).filter(
+                    Servicio.dispositivo_id.in_(disp_ids),
+                    Servicio.estado == "abierto"
+                ).all()
+                for s in servicios:
+                    puerto = s.puerto
+                    proto = s.protocolo or "tcp"
+                    port_existente = session.query(PortHeuristic).filter_by(puerto=puerto, protocolo=proto).first()
+                    if port_existente:
+                        if confidence > (port_existente.confidence or 0):
+                            port_existente.vendor = vendor
+                            port_existente.confidence = confidence
+                    else:
+                        session.add(PortHeuristic(puerto=puerto, protocolo=proto, vendor=vendor, confidence=confidence))
         session.commit()
         return {"ok": True, "insertados": insertados, "actualizados": actualizados}
     except Exception as e:
@@ -1182,9 +1276,9 @@ async def obtener_topologia(nombre_cliente: str = Query("red_cliente")):
                 .first()
             )
 
-            estado = "desconocido"
+            estado = "transparente" if d.transparente else "desconocido"
             latencia = None
-            if ultimo_ping:
+            if not d.transparente and ultimo_ping:
                 estado = ultimo_ping.estado
                 latencia = ultimo_ping.latencia_ms
 

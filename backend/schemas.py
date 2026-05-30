@@ -11,6 +11,7 @@ class DispositivoCreate(BaseModel):
     tipo: Optional[str] = None
     descripcion: Optional[str] = None
     tipo_asignacion_ip: Optional[str] = "desconocido"
+    transparente: Optional[int] = 0
 
 
 class DispositivoOut(BaseModel):
@@ -26,6 +27,7 @@ class DispositivoOut(BaseModel):
     primera_vez: Optional[datetime] = None
     ultima_vez: Optional[datetime] = None
     activo: int = 1
+    transparente: int = 0
     segmento: Optional[str] = None
     serial: Optional[str] = None
     tipo_asignacion_ip: Optional[str] = "desconocido"

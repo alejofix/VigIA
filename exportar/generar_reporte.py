@@ -24,6 +24,8 @@ def _colectar_datos(session: Session, nombre_cliente: str = "", cid: int = 0) ->
     items = []
 
     for d in dispositivos:
+        if d.transparente:
+            continue
         ultimo_ping = (
             session.query(Ping)
             .filter_by(dispositivo_id=d.id)

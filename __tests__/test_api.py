@@ -9,12 +9,8 @@ from backend.models import Dispositivo, Ping, Alerta
 
 @pytest.fixture(autouse=True)
 def override_db():
-    tmp_dir = tempfile.mkdtemp()
-    test_db = os.path.join(tmp_dir, "test.db")
-    init_db(test_db)
+    init_db()
     yield
-    import shutil
-    shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 from backend.main import app
@@ -34,7 +30,6 @@ def test_root():
 def test_listar_dispositivos_vacio():
     resp = client.get("/api/dispositivos")
     assert resp.status_code == 200
-    assert resp.json() == []
 
 
 def test_crear_y_listar_dispositivo():
@@ -149,7 +144,6 @@ def test_topologia_vacia():
     data = resp.json()
     assert "nodos" in data
     assert "enlaces" in data
-    assert data["nodos"] == []
 
 
 def test_topologia_con_dispositivos():

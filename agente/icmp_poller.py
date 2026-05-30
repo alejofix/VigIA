@@ -14,7 +14,6 @@ load_dotenv()
 
 logger = logging.getLogger("vigia.icmp_poller")
 POLL_INTERVAL = int(os.getenv("POLL_INTERVAL", "60"))
-DB_PATH = os.getenv("DB_PATH", "data/")
 
 
 def obtener_ultimo_estado(session: Session, dispositivo_id: int) -> str:
@@ -186,7 +185,7 @@ def ciclo_polling(nombre_cliente: str, intervalo: int = POLL_INTERVAL):
 
     try:
         _descubrir_por_arp(session, cid)
-        dispositivos = session.query(Dispositivo).filter_by(activo=1, cliente_id=cid).all()
+        dispositivos = session.query(Dispositivo).filter_by(activo=1, transparente=0, cliente_id=cid).all()
         if not dispositivos:
             logger.info("No hay dispositivos activos para monitorear")
             return

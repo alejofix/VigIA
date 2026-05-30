@@ -1,5 +1,3 @@
-import os
-import tempfile
 import pytest
 from unittest.mock import patch, MagicMock
 from backend.database import init_db, get_session
@@ -8,11 +6,8 @@ from backend.models import Dispositivo, Ping
 
 @pytest.fixture
 def session_factory():
-    tmp = tempfile.mktemp(suffix=".db")
-    init_db(tmp)
-    yield get_session(tmp)
-    if os.path.exists(tmp):
-        os.remove(tmp)
+    init_db()
+    yield get_session()
 
 
 def test_detectar_tipo():
@@ -81,6 +76,3 @@ def test_obtener_ultimo_estado(session_factory):
     estado = obtener_ultimo_estado(session, d.id)
     assert estado == "down"
     session.close()
-
-
-

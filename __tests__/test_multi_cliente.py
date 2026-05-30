@@ -1,20 +1,13 @@
-import os
-import tempfile
 import pytest
 from fastapi.testclient import TestClient
-from backend.database import init_db, get_session
+from backend.database import init_db
 from backend.models import Dispositivo
 
 
 @pytest.fixture(autouse=True)
 def tmp_db():
-    tmp_dir = tempfile.mkdtemp()
-    import backend.database as db_mod
-    test_db = os.path.join(tmp_dir, "test.db")
-    init_db(test_db)
+    init_db()
     yield
-    import shutil
-    shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 from backend.main import app
